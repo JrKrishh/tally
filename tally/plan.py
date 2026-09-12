@@ -89,6 +89,7 @@ def main():
         "tasks_validate": validate,
         "tasks_no_history": no_history,
         "skipped_prior": dict((t, round(diff[t], 3)) for t in skipped),
+        "run_prior": dict((t, round(diff[t], 3)) for t in run),     # so report can impute cells not yet measured
         "expected_tokens": {"plan": cost_plan, "full_at_same_attempts": cost_full},
     }
     out = args.out or str(DATA.parent / ("plan_%s.json" % args.benchmark))

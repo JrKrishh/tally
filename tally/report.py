@@ -163,13 +163,16 @@ def main():
 
     # estimate over the whole benchmark: measured where run, prior where skipped
     prior = plan["skipped_prior"]
+    run_prior = plan.get("run_prior", {})            # plans written before this field lack it
     all_tasks = sorted(set(plan["tasks_run"]) | set(prior) | set(plan.get("tasks_no_history", [])))
-    est_parts, covered = [], 0
+    est_parts, covered, imputed_run = [], 0, 0
     for t in all_tasks:
         if t in measured:
             est_parts.append(measured[t]); covered += 1
         elif t in prior:
             est_parts.append(prior[t])
+        elif t in run_prior:                          # planned but not yet run: history stands in for now
+            est_parts.append(run_prior[t]); imputed_run += 1
     est = float(np.mean(est_parts)) if est_parts else float("nan")
 
     print("## %s on %s (%s)" % (args.model, plan["benchmark"], plan["dataset"]))
