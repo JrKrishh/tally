@@ -40,9 +40,7 @@ mkdir -p "$HOME/tally/data"
 if [ -f "$HOME/tally/pyproject.toml" ]; then
   cd "$HOME/tally"
   uv venv --python 3.13 .venv
-  # shellcheck disable=SC1091
-  . .venv/bin/activate
-  pip install -e .
+  uv pip install --python .venv/bin/python -e .     # uv venvs ship without pip
 fi
 
 cat <<'EOF'

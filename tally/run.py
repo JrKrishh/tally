@@ -34,7 +34,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def harbor_bin():
-    for c in (ROOT / ".venv-harbor" / "Scripts" / "harbor.exe", ROOT / ".venv-harbor" / "bin" / "harbor"):
+    for c in (ROOT / ".venv-harbor" / "Scripts" / "harbor.exe", ROOT / ".venv-harbor" / "bin" / "harbor",
+              Path.home() / ".local" / "bin" / "harbor"):        # uv tool install; not on PATH in non-login ssh
         if c.exists():
             return str(c)
     found = shutil.which("harbor")
