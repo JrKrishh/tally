@@ -64,12 +64,16 @@ def full(by, models, common):
     return acc, cost
 
 
-def simulate(by, models, common, lo, hi, k, rng):
-    """Each model treated as new in turn. -> estimated accuracy, tokens spent, tasks run."""
+def simulate(by, models, common, lo, hi, k, rng, diff_fn=None):
+    """Each model treated as new in turn. -> estimated accuracy, tokens spent, tasks run.
+    diff_fn(model, task) replaces the history prior, e.g. with a cold-start estimate."""
     est, spent, nrun = {}, {}, []
     for m in models:
         others = [o for o in models if o != m]
-        diff = dict((t, float(np.mean([np.mean([p for p, _ in by[(o, t)]]) for o in others]))) for t in common)
+        if diff_fn:
+            diff = dict((t, float(diff_fn(m, t))) for t in common)
+        else:
+            diff = dict((t, float(np.mean([np.mean([p for p, _ in by[(o, t)]]) for o in others]))) for t in common)
         run = set(t for t in common if lo <= diff[t] <= hi)
         nrun.append(len(run))
         a, c = 0.0, 0.0
