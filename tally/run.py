@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import nebius
@@ -48,7 +49,10 @@ def build(plan, phase, args):
         tasks = tasks[:args.limit]
     attempts = (args.attempts or plan["attempts"]) if phase == "run" else 1
     slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model).strip("-")
-    job = "tally-%s-%s-%s" % (plan["benchmark"], phase, slug)
+    # Harbor writes a job dir even for a dry run and locks it; a fixed name would
+    # collide on the next run. Timestamp every job; report reads the newest.
+    job = "tally-%s-%s-%s-%s%s" % (plan["benchmark"], phase, slug,
+                                   time.strftime("%Y%m%d-%H%M%S"), "-dry" if args.dry_run else "")
     cmd = [harbor_bin(), "run",
            "-d", plan["dataset"],
            "-a", "terminus-2",

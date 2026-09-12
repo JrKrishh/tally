@@ -43,20 +43,28 @@ def find_tokens(obj, depth=0):
     return total
 
 
-def load_job(jobs_dir, job_name):
-    """-> {task: [(reward, tokens, errored), ...]} from jobs/<job>/result.json, or per-trial files."""
-    jd = Path(jobs_dir) / job_name
-    if not jd.exists():
-        return None
-    trials = []
+def find_jobs(jobs_dir, prefix, include_dry=False):
+    """Job dirs matching a prefix, oldest first. Names are timestamped by tally.run."""
+    dirs = [p for p in Path(jobs_dir).glob(prefix + "*") if p.is_dir()]
+    if not include_dry:
+        dirs = [p for p in dirs if not p.name.endswith("-dry")]
+    return sorted(dirs, key=lambda p: p.stat().st_mtime)
+
+
+def load_job(jobs_dir, prefix):
+    """Newest job matching prefix -> ({task: [(reward, tokens, errored)]}, job stats, job dir)."""
+    dirs = find_jobs(jobs_dir, prefix)
+    if not dirs:
+        return None, {}, None
+    jd = dirs[-1]
+    trials, stats = [], {}
     top = jd / "result.json"
     if top.exists():
         j = json.load(top.open(encoding="utf-8"))
+        stats = j.get("stats") or {}
         trials = j.get("trial_results") or []
-    if not trials:
-        for f in sorted(jd.rglob("result.json")):
-            if f == top:
-                continue
+    if not trials:                                   # per-trial files: jobs/<job>/<task>__<id>/result.json
+        for f in sorted(jd.glob("*/result.json")):
             try:
                 trials.append(json.load(f.open(encoding="utf-8")))
             except Exception:
@@ -68,7 +76,7 @@ def load_job(jobs_dir, job_name):
         reward = rewards.get("reward") if isinstance(rewards, dict) else None
         errored = bool(t.get("exception_info"))
         out.setdefault(task, []).append((float(reward) if reward is not None else None, find_tokens(t.get("agent_result") or {}), errored))
-    return out
+    return out, stats, jd
 
 
 def main():
@@ -76,15 +84,45 @@ def main():
     ap.add_argument("--plan", required=True)
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
     ap.add_argument("--model", default="nvidia/nemotron-3-nano-30b-a3b")
+    ap.add_argument("--inspect", action="store_true", help="dump the structure of the first trial result and exit")
     args = ap.parse_args()
     plan = json.load(open(args.plan))
     slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model).strip("-")
     lo, hi = plan["window"]
 
-    run = load_job(args.jobs_dir, "tally-%s-run-%s" % (plan["benchmark"], slug)) or {}
-    val = load_job(args.jobs_dir, "tally-%s-validate-%s" % (plan["benchmark"], slug)) or {}
+    if args.inspect:
+        dirs = find_jobs(args.jobs_dir, "tally-%s-run-%s" % (plan["benchmark"], slug), include_dry=True)
+        jd = dirs[-1] if dirs else Path(args.jobs_dir) / "none"
+        files = sorted(jd.rglob("*.json")) if jd.exists() else []
+        print("## %s: %d json files" % (jd, len(files)))
+        for f in files[:12]:
+            print("   %s  (%d bytes)" % (f.relative_to(jd), f.stat().st_size))
+        def shape(v, depth=0):
+            if isinstance(v, dict):
+                return "{" + ", ".join("%s: %s" % (k, shape(x, depth + 1)) for k, x in list(v.items())[:14]) + "}" if depth < 3 else "{...}"
+            if isinstance(v, list):
+                return "[%d x %s]" % (len(v), shape(v[0], depth + 1) if v else "?")
+            return type(v).__name__
+        for f in files:
+            if f.name == "result.json":
+                j = json.load(f.open(encoding="utf-8"))
+                print("\n## %s" % f.relative_to(jd))
+                print("   " + shape(j))
+                tr = (j.get("trial_results") or [j])[0]
+                for key in ("agent_result", "verifier_result", "agent_execution", "exception_info"):
+                    if key in tr:
+                        print("   %s: %s" % (key, json.dumps(tr[key])[:700]))
+                break
+        return
+
+    run, rstats, rdir = load_job(args.jobs_dir, "tally-%s-run-%s" % (plan["benchmark"], slug))
+    val, vstats, vdir = load_job(args.jobs_dir, "tally-%s-validate-%s" % (plan["benchmark"], slug))
+    run, val = run or {}, val or {}
     if not run and not val:
         sys.exit("no results under %s for %s -- run: python -m tally.run" % (args.jobs_dir, args.model))
+    if rdir:
+        print("  run job: %s   trials: %s completed, %s errored, %s pending"
+              % (rdir.name, rstats.get("n_completed_trials"), rstats.get("n_errored_trials"), rstats.get("n_pending_trials")))
 
     def rate(atts):
         r = [x for x, _, _ in atts if x is not None]
@@ -111,11 +149,20 @@ def main():
     print("  run phase   : %d tasks measured, %d attempts, %d errored trials" % (len(measured), n_attempts, errors))
     print("  measured pass rate on run tasks: %.3f" % float(np.mean(list(measured.values()))) if measured else "  (nothing measured yet)")
     print("  estimated accuracy on all %d tasks (measured where run, history where skipped): %.3f" % (len(all_tasks), est))
+    # Harbor tallies tokens and cost at the job level; prefer that over hunting in agent results.
+    job_tokens = (rstats.get("n_input_tokens") or 0) + (rstats.get("n_output_tokens") or 0)
+    if job_tokens:
+        tokens_run = job_tokens
     if tokens_run:
-        print("  tokens spent (run phase): %.1fM   plan expected ~%.0fM at frontier-model lengths" % (tokens_run / 1e6, plan["expected_tokens"]["plan"] / 1e6))
-        print("  tokens per attempt: %.0fK   -> full plan at this rate: ~%.0fM" % (tokens_run / 1e3 / max(1, n_attempts), tokens_run / max(1, n_attempts) * (len(plan["tasks_run"]) * plan["attempts"] + len(plan["tasks_validate"])) / 1e6))
+        full_attempts = len(plan["tasks_run"]) * plan["attempts"] + len(plan["tasks_validate"]) + len(plan.get("tasks_no_history", [])) * plan["attempts"]
+        per = tokens_run / max(1, n_attempts)
+        print("  tokens spent (run phase): %.2fM  (%s in / %s out, cache %s)   Harbor cost_usd: %s"
+              % (tokens_run / 1e6, rstats.get("n_input_tokens"), rstats.get("n_output_tokens"), rstats.get("n_cache_tokens"), rstats.get("cost_usd")))
+        print("  per attempt: %.0fK tokens   -> the full plan (%d attempts) at this rate: ~%.0fM tokens"
+              % (per / 1e3, full_attempts, per * full_attempts / 1e6))
+        print("  plan expected ~%.0fM at frontier-model trajectory lengths" % (plan["expected_tokens"]["plan"] / 1e6))
     else:
-        print("  tokens: not found in agent results (inspect jobs/<job>/**/result.json)")
+        print("  tokens: none recorded yet (job stats empty and no token counters in agent results)")
 
     # rank against the models history knows
     by, models, common = select.cells(select.load_attempts(plan["benchmark"]))
