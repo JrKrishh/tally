@@ -63,12 +63,34 @@ def load_job(jobs_dir, prefix):
         j = json.load(top.open(encoding="utf-8"))
         stats = j.get("stats") or {}
         trials = j.get("trial_results") or []
-    if not trials:                                   # per-trial files: jobs/<job>/<task>__<id>/result.json
-        for f in sorted(jd.glob("*/result.json")):
-            try:
-                trials.append(json.load(f.open(encoding="utf-8")))
-            except Exception:
-                pass
+    salvaged = 0
+    if not trials:                                   # per-trial dirs: jobs/<job>/<task>__<id>/
+        for d in sorted(p for p in jd.iterdir() if p.is_dir()):
+            rec, f = None, d / "result.json"
+            if f.exists() and f.stat().st_size > 0:
+                try:
+                    rec = json.load(f.open(encoding="utf-8"))
+                except Exception:
+                    rec = None
+            if rec is None:
+                # Harbor can crash at the final write (cp1252 on Windows) after the agent and
+                # verifier both finished. The verdict and the token counts are still on disk.
+                rew, traj = d / "verifier" / "reward.txt", d / "agent" / "trajectory.json"
+                if not rew.exists():
+                    continue
+                try:
+                    reward = float(rew.read_text(encoding="utf-8").strip() or 0)
+                except ValueError:
+                    reward = None
+                rec = {"task_name": d.name.split("__")[0], "verifier_result": {"rewards": {"reward": reward}}, "agent_result": {}}
+                if traj.exists():
+                    try:
+                        rec["agent_result"] = {"metrics": json.load(traj.open(encoding="utf-8", errors="replace")).get("final_metrics") or {}}
+                    except Exception:
+                        pass
+                salvaged += 1
+            trials.append(rec)
+    stats["n_salvaged"] = salvaged
     out = {}
     for t in trials:
         task = t.get("task_name") or t.get("task_id") or "?"
@@ -121,8 +143,9 @@ def main():
     if not run and not val:
         sys.exit("no results under %s for %s -- run: python -m tally.run" % (args.jobs_dir, args.model))
     if rdir:
-        print("  run job: %s   trials: %s completed, %s errored, %s pending"
-              % (rdir.name, rstats.get("n_completed_trials"), rstats.get("n_errored_trials"), rstats.get("n_pending_trials")))
+        print("  run job: %s   trials: %s completed, %s errored, %s pending%s"
+              % (rdir.name, rstats.get("n_completed_trials"), rstats.get("n_errored_trials"), rstats.get("n_pending_trials"),
+                 "   (%d salvaged from trial dirs: Harbor never wrote their summary)" % rstats["n_salvaged"] if rstats.get("n_salvaged") else ""))
 
     def rate(atts):
         r = [x for x, _, _ in atts if x is not None]

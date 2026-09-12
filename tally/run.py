@@ -90,6 +90,12 @@ def main():
 
     plan = json.load(open(args.plan))
     env = dict(os.environ)
+    # Harbor writes trial results with Path.write_text() and no encoding. On Windows
+    # that is cp1252, and the first model reply containing a character outside it
+    # (a "≈" was enough) crashed a finished 11-minute trial at the final write.
+    # Python's UTF-8 mode makes every default-encoded open() UTF-8.
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     if not args.dry_run:
         env["OPENAI_API_KEY"] = nebius.key()
     else:
