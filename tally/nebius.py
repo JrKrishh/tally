@@ -44,7 +44,7 @@ def models():
     return sorted(m["id"] for m in r.json().get("data", []))
 
 
-def chat(model, prompt, max_tokens=2000, temperature=0.0):
+def chat(model, prompt, max_tokens=4000, temperature=0.0):
     """-> (content, reasoning, usage).
 
     Reasoning models (Nemotron 3) think in a separate reasoning field and, if

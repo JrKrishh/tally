@@ -2,9 +2,10 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-Status: **steps 1–3 complete.** The data is validated, the mechanism is measured, and
-the first cost figure is earned: **Terminal-Bench at 17.7% of the tokens with the
-six-model ranking intact (Spearman 0.989).** Cold-start and the usable tool are next.
+Status: **steps 1–4 complete.** The data is validated, the mechanism is measured, the
+cost figure is earned — **Terminal-Bench at 17.7% of the tokens with the six-model
+ranking intact** — and the reasoning model's contribution has been measured against
+what it replaces, including where it fails.
 
 ## The problem
 
@@ -161,9 +162,55 @@ ordering, and neither does the full evaluation; "top-1 kept" there is a coin fli
 construction. Spearman over six models also takes only a handful of values, so read
 it alongside the MAE.
 
-What this step does not do: choose the window automatically, report a per-model
-Pareto frontier, or handle a benchmark with no history. The last is the cold-start
-problem, and it is where the reasoning model enters — next.
+## Step 4: cold start — can the task text stand in for history?
+
+A benchmark nobody has run has no history, so the only prior left is the task
+itself, read by a reasoning model. This is the one job in the harness that needs
+one, and it has a measured ceiling to be judged against. NVIDIA Nemotron 3 Super
+(`nvidia/nemotron-3-super-120b-a12b` on Nebius Token Factory) was asked, per task,
+zero-shot, for the probability a frontier agent solves it. The kill criterion was
+declared before the run: Spearman ≥ 0.3 against true difficulty *and* beats a
+text-length baseline.
+
+| | Spearman vs true difficulty | text-length baseline | verdict |
+|---|---|---|---|
+| Terminal-Bench (85 of 88 parsed) | **0.326** | 0.120 | pass, narrowly |
+| SWE-bench Pro (52 of 54 parsed) | 0.133 | −0.381 | **fail** |
+
+Self-contained tasks can be read for difficulty, weakly. Repo-grounded tasks cannot:
+the difficulty lives in the codebase the model never sees, and the length of the
+issue predicts it better than the model does. Receipt for all 142 tasks: ~98K input
+and ~83K output tokens — cents. The model's reasoning arrived in a separate field
+averaging 2,800 characters per Terminal-Bench task; at a 300-token cap the answer
+field came back *empty with no error*, which cost one wasted run before it was
+understood.
+
+The correlation is not what matters. The policy is:
+
+| step-3 policy — skip outside [0.1, 0.9], cap 3 — prior from | Terminal-Bench cost · Spearman · MAE | SWE-bench Pro cost · Spearman · MAE |
+|---|---|---|
+| history (the other five models) | 17.7% · 0.989 · 0.028 | 3.6% · 0.886 · 0.028 |
+| **Nemotron reading the task, no history** | 23.8% · 0.943 · 0.014 | 8.5% · 0.911 · 0.021 |
+| no prior at all (cap 3, run every task) | 26.4% · 1.000 · 0.012 | 8.9% · 0.951 · 0.016 |
+
+Read against the right row: **most of the cold-start saving is the attempt cap.** The
+model's read of the task buys a further ~10% on Terminal-Bench at a small fidelity
+cost, and nothing on SWE-bench Pro. History is 1.3–2.4× cheaper still, because it
+skips with confidence. The Nemotron row's higher Spearman on SWE-bench Pro is not a
+win over history — it runs twice as many tasks, which is a cost-fidelity trade, not
+a better prior.
+
+What the weak prior does have is the property worth keeping: **it fails safe.**
+Uncertain estimates land inside the window and the task runs. The harness degrades
+from history → weak prior → no prior gracefully, never by skipping a task it
+shouldn't; the three Terminal-Bench tasks the model couldn't score were handled
+exactly that way.
+
+So the reasoning model's place in this harness is a real, modest contribution where
+tasks can be read, an honest zero where they cannot, and both measured against what
+it replaces. Untested, and legitimate as *second* experiments if labelled as such:
+anchoring with a few scored tasks from another benchmark, pairwise "which is harder"
+ranking, and combining the estimate with issue length on SWE-bench Pro.
 
 ## Reproduce
 
@@ -175,6 +222,9 @@ python -m tally.matrix                       # step 1: both sources, the diff, t
 python -m tally.early extract                # step 2: prefix features + text at N=10
 python -m tally.early fit                    # step 2: every AUC above
 python -m tally.select                       # step 3: the policy table
+python -m tally.coldstart extract            # step 4: task text + true difficulty
+NEBIUS_API_KEY=... python -m tally.coldstart score   # step 4: Nemotron on Token Factory, resumable
+python -m tally.coldstart report             # step 4: re-analyse scores on disk, spends nothing
 ```
 
 `snapshot_download` does not work on this datastore — the Hub returns an empty
@@ -192,6 +242,8 @@ puller lists each collection through the tree API and fetches per file instead.
   costs under generous budgets.
 - **Six models.** Every leave-one-out result is a prior from five models, not fifty,
   and a ranking over six.
+- **One reasoning model, one prompt, zero-shot.** The cold-start numbers are a floor
+  for what task text can give, not a ceiling.
 - **Every SWE-bench Pro `sample_id` carries a redaction artefact** (`…<AWS-SECRET-KE…>`).
   The 54 remain distinct, so joins work, but never trust the suffix.
 - **SWE-bench Pro is a 54-task subset**, not the full benchmark; ~1,700 of its

@@ -125,9 +125,28 @@ def cmd_score(args):
                     done[t["task"]] = r
                 fh.write(json.dumps(r) + "\n")
                 fh.flush()
-                progress("  %s: %d/%d scored  (%d in / %d out tokens this run, %d of them reasoning)"
-                         % (col, len(done), len(tasks), usage_in, usage_out, usage_think), i + 1, len(tasks))
+                progress("  %s: %d/%d scored  (%d in / %d out tokens this run)"
+                         % (col, len(done), len(tasks), usage_in, usage_out), i + 1, len(tasks))
         report(col, tasks, done, args.model, usage_in, usage_out)
+
+
+def cmd_report(args):
+    """Re-run the analysis on scores already on disk. Spends nothing."""
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model)
+    for col in COLLECTIONS:
+        src = DATA.parent / ("tasks_%s.jsonl" % col)
+        out = DATA.parent / ("coldstart_%s_%s.jsonl" % (col, slug))
+        if not (src.exists() and out.exists()):
+            print("## %s: nothing scored yet" % col)
+            continue
+        tasks = [json.loads(l) for l in src.open(encoding="utf-8") if l.strip()]
+        done = {}
+        for l in out.open(encoding="utf-8"):
+            if l.strip():
+                r = json.loads(l)
+                if r.get("p_solve") is not None:
+                    done[r["task"]] = r
+        report(col, tasks, done, args.model, 0, 0)
 
 
 def report(col, tasks, done, model, usage_in, usage_out):
@@ -142,25 +161,36 @@ def report(col, tasks, done, model, usage_in, usage_out):
     chars = [r[2] for r in rows]
     sp_model = spearmanr(true, pred).correlation
     sp_len = spearmanr(true, chars).correlation
-    print("\n## %s cold start: %s on %d tasks   (receipt this run: %d in / %d out tokens)"
-          % (col, model, len(rows), usage_in, usage_out))
+    receipt = ("receipt this run: %d in / %d out tokens" % (usage_in, usage_out)) if usage_in else "report only"
+    print("\n## %s cold start: %s on %d of %d tasks   (%s)" % (col, model, len(rows), len(tasks), receipt))
+    rc = [done[t["task"]].get("reasoning_chars") for t in tasks if t["task"] in done]
+    cc = [done[t["task"]].get("content_chars") for t in tasks if t["task"] in done]
+    if any(x is not None for x in rc):
+        print("  reply shape: mean %.0f chars reasoning field, %.0f chars content" %
+              (np.mean([x or 0 for x in rc]), np.mean([x or 0 for x in cc])))
     print("  Spearman vs true difficulty:   model %.3f     text-length baseline %.3f" % (sp_model, sp_len))
     print("  kill criterion (>= 0.3 and beats length): %s"
           % ("PASS" if sp_model >= 0.3 and sp_model > abs(sp_len) else "FAIL"))
-    # the downstream test: run step 3's policy with the model's difficulty instead of history
+    # the downstream test: run step 3's policy with the model's difficulty instead of history.
+    # A task the model could not score is unknown, and unknown means run it: prior 0.5.
     by, models, common = select.cells(select.load_attempts(col))
     p = dict((t["task"], done[t["task"]]["p_solve"]) for t in tasks
              if t["task"] in done and done[t["task"]]["p_solve"] is not None)
-    if not all(t in p for t in common):
-        print("  (skipping policy comparison: %d shared tasks unscored)" % sum(1 for t in common if t not in p))
-        return
+    missing = [t for t in common if t not in p]
+    if missing:
+        print("  (%d shared tasks unscored -> treated as uncertain, i.e. run)" % len(missing))
+        for t in missing:
+            p[t] = 0.5
     acc, cost = select.full(by, models, common)
     total = sum(cost.values())
     print("  step-3 policy [0.10, 0.90] cap 3, prior from:      cost   spearman   acc MAE")
-    for label, fn in (("history (other models)", None), ("%s, no history" % model.split("/")[-1], lambda m, t: p[t])):
+    # third row is the honest baseline: no prior at all, cap 3, run every task
+    for label, fn, lo, hi in (("history (other models)", None, 0.10, 0.90),
+                              ("%s, no history" % model.split("/")[-1], lambda m, t: p[t], 0.10, 0.90),
+                              ("no prior (run every task, cap 3)", None, 0.0, 1.0)):
         sp, mae, cf = [], [], []
         for seed in range(select.SEEDS):
-            est, spent, _ = select.simulate(by, models, common, 0.10, 0.90, 3, random.Random(seed), diff_fn=fn)
+            est, spent, _ = select.simulate(by, models, common, lo, hi, 3, random.Random(seed), diff_fn=fn)
             sp.append(spearmanr([acc[m] for m in models], [est[m] for m in models]).correlation)
             mae.append(float(np.mean([abs(est[m] - acc[m]) for m in models])))
             cf.append(sum(spent.values()) / total)
@@ -174,11 +204,15 @@ def main():
     s = sub.add_parser("score")
     s.add_argument("--model", default=nebius.DEFAULT_MODEL)
     s.add_argument("--limit", type=int, help="score at most this many new tasks per collection (smoke test)")
+    r = sub.add_parser("report")
+    r.add_argument("--model", default=nebius.DEFAULT_MODEL)
     args = ap.parse_args()
     if args.cmd == "extract":
         cmd_extract(args)
     elif args.cmd == "score":
         cmd_score(args)
+    elif args.cmd == "report":
+        cmd_report(args)
     else:
         ap.print_help()
 
