@@ -147,7 +147,12 @@ def main():
 
     print("## %s on %s (%s)" % (args.model, plan["benchmark"], plan["dataset"]))
     print("  run phase   : %d tasks measured, %d attempts, %d errored trials" % (len(measured), n_attempts, errors))
-    print("  measured pass rate on run tasks: %.3f" % float(np.mean(list(measured.values()))) if measured else "  (nothing measured yet)")
+    if not measured:
+        print("  nothing measured: every trial errored, so there is no estimate and no ranking yet.")
+        for t, atts in list(run.items())[:3]:
+            print("   %s: %d attempt(s), errored=%s" % (t, len(atts), [e for _, _, e in atts]))
+        return
+    print("  measured pass rate on run tasks: %.3f" % float(np.mean(list(measured.values()))))
     print("  estimated accuracy on all %d tasks (measured where run, history where skipped): %.3f" % (len(all_tasks), est))
     # Harbor tallies tokens and cost at the job level; prefer that over hunting in agent results.
     job_tokens = (rstats.get("n_input_tokens") or 0) + (rstats.get("n_output_tokens") or 0)

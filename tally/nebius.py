@@ -44,6 +44,16 @@ def models():
     return sorted(m["id"] for m in r.json().get("data", []))
 
 
+def main():
+    """python -m tally.nebius -> the model ids Token Factory actually serves. Guessing one cost a trial."""
+    ids = models()
+    nv = [m for m in ids if m.lower().startswith("nvidia/") or "nemotron" in m.lower()]
+    print("# %d models reachable\n## nvidia / nemotron (use these ids verbatim)" % len(ids))
+    print("\n".join("  " + m for m in nv) if nv else "  (none)")
+    others = [m for m in ids if m not in nv]
+    print("## %d others, e.g. %s" % (len(others), ", ".join(others[:6])))
+
+
 def chat(model, prompt, max_tokens=4000, temperature=0.0):
     """-> (content, reasoning, usage).
 
@@ -59,3 +69,7 @@ def chat(model, prompt, max_tokens=4000, temperature=0.0):
     msg = out["choices"][0]["message"]
     reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
     return msg.get("content") or "", reasoning, out.get("usage") or {}
+
+
+if __name__ == "__main__":
+    main()
