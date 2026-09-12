@@ -2,8 +2,9 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-Status: **steps 1–2 complete.** The data is validated and the first mechanism has
-been tested. No cost saving is claimed yet. This README grows only as claims are earned.
+Status: **steps 1–3 complete.** The data is validated, the mechanism is measured, and
+the first cost figure is earned: **Terminal-Bench at 17.7% of the tokens with the
+six-model ranking intact (Spearman 0.989).** Cold-start and the usable tool are next.
 
 ## The problem
 
@@ -115,13 +116,54 @@ token is generated.
 
 That kills early stopping as the lever and replaces it with a better one: **most
 (model, task) cells are foregone conclusions, and they are identifiable in advance.**
-The savings are in choosing which cells to run, not in interrupting runs. Reading
-trajectories only earns its keep on a benchmark nobody has run before — and there,
-on SWE-bench Pro, TF-IDF is already at 0.84, so a reasoning model has a high bar to
-clear and should be measured against it, not assumed.
+The savings are in choosing which cells to run, not in interrupting runs.
 
-What this does *not* yet say: how much cost the prior actually saves at what
-ranking-preservation cost. AUC is not a dollar figure. That is step 3.
+## Step 3: what does selection actually save?
+
+AUC is not a dollar figure. So: each model is treated as new in turn, its task
+difficulties come from the other five, only tasks whose difficulty falls inside a
+window are run, the rest are imputed from the prior, and attempts per run cell are
+optionally capped. Cost and the six-model ranking are compared against the full
+evaluation on the tasks all six share; subsampled attempts are averaged over five
+seeds.
+
+The full evaluation is **17.8 billion tokens** on Terminal-Bench (86 tasks) and
+**25.5 billion** on SWE-bench Pro (40 tasks) — the order of magnitude behind the
+$40K–$320K figures above.
+
+| policy | Terminal-Bench cost · Spearman · acc MAE | SWE-bench Pro cost · Spearman · acc MAE |
+|---|---|---|
+| full evaluation | 100% · 1.000 · 0.000 | 100% · 1.000 · 0.000 |
+| skip tasks history calls ≥95% certain | **76% · 1.000 · 0.014** | **52% · 1.000 · 0.017** |
+| skip ≥90% certain | 68% · 1.000 · 0.023 | 43% · 0.943 · 0.020 |
+| cap at 3 attempts per cell, run every task | 26% · 1.000 · 0.012 | 8.9% · 0.951 · 0.016 |
+| skip ≥90% certain **and** cap at 3 | **17.7% · 0.989 · 0.028** | 3.6% · 0.886 · 0.028 |
+| skip ≥80% certain and cap at 3 | 13.2% · 0.943 · 0.043 | 2.4% · 0.840 · 0.036 |
+
+Two levers, and they are not equal:
+
+1. **Skipping the cells history calls certain is lossless.** A quarter of Terminal-Bench
+   and half of SWE-bench Pro goes unrun, the ranking is untouched, and every model's
+   accuracy is within 0.017 of the full run.
+2. **Capping attempts is the larger saving, and it is where the trade-off lives.** The
+   source study ran 10–15 attempts per cell because it was measuring inference-scaling
+   curves; three per cell recovers the ranking at 26% and 9% of the cost. Combined with
+   skipping, **Terminal-Bench evaluates at 17.7% of its tokens with Spearman 0.989 and
+   the top model preserved in all five seeds — 5.6× cheaper.**
+
+Against which baseline, honestly: 5.6× is against the study's own budget. Against a
+sensible three-attempt default, task selection alone buys a further 1.5× on
+Terminal-Bench and is not worth it on SWE-bench Pro at 40 tasks.
+
+**The SWE-bench Pro caveat.** Its top two models score 0.810 and 0.805 — a gap of one
+task in two hundred, inside the 12% per-attempt flip rate. No policy resolves that
+ordering, and neither does the full evaluation; "top-1 kept" there is a coin flip by
+construction. Spearman over six models also takes only a handful of values, so read
+it alongside the MAE.
+
+What this step does not do: choose the window automatically, report a per-model
+Pareto frontier, or handle a benchmark with no history. The last is the cold-start
+problem, and it is where the reasoning model enters — next.
 
 ## Reproduce
 
@@ -132,6 +174,7 @@ python -m tally.pull --phase samples         # ~7.4 GB, resumable
 python -m tally.matrix                       # step 1: both sources, the diff, the tables
 python -m tally.early extract                # step 2: prefix features + text at N=10
 python -m tally.early fit                    # step 2: every AUC above
+python -m tally.select                       # step 3: the policy table
 ```
 
 `snapshot_download` does not work on this datastore — the Hub returns an empty
@@ -147,8 +190,8 @@ puller lists each collection through the tree API and fetches per file instead.
 - **Fixed budgets per benchmark** — 10M tokens on Terminal-Bench, 30M on SWE-bench
   Pro — one to three orders of magnitude above typical defaults. Costs here are
   costs under generous budgets.
-- **Six models.** The new-model result is leave-one-out over six; a prior from five
-  models is what was tested, not a prior from fifty.
+- **Six models.** Every leave-one-out result is a prior from five models, not fifty,
+  and a ranking over six.
 - **Every SWE-bench Pro `sample_id` carries a redaction artefact** (`…<AWS-SECRET-KE…>`).
   The 54 remain distinct, so joins work, but never trust the suffix.
 - **SWE-bench Pro is a 54-task subset**, not the full benchmark; ~1,700 of its
