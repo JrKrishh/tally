@@ -44,12 +44,18 @@ def models():
     return sorted(m["id"] for m in r.json().get("data", []))
 
 
-def chat(model, prompt, max_tokens=300, temperature=0.0):
-    """-> (text, usage dict). Usage is kept so the receipt can be printed."""
+def chat(model, prompt, max_tokens=2000, temperature=0.0):
+    """-> (content, reasoning, usage).
+
+    Reasoning models (Nemotron 3) think in a separate reasoning field and, if
+    max_tokens runs out mid-thought, return EMPTY content with no error. Keep
+    both fields so the caller can fall back, and keep usage for the receipt."""
     out = _post("/chat/completions", {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": temperature,
     })
-    return out["choices"][0]["message"]["content"], out.get("usage") or {}
+    msg = out["choices"][0]["message"]
+    reasoning = msg.get("reasoning_content") or msg.get("reasoning") or ""
+    return msg.get("content") or "", reasoning, out.get("usage") or {}

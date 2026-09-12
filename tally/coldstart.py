@@ -37,7 +37,7 @@ TASK
 
 Estimate the probability, from 0.0 to 1.0, that such an agent solves this task correctly. Weigh: how precisely the requirements are specified, how many independent things must all go right, whether the agent can verify its own work from inside the environment, and how much specialised knowledge it needs.
 
-Answer with ONLY a JSON object on one line: {{"p_solve": <number between 0 and 1>, "why": "<one sentence>"}}"""
+Think as much as you need. Then your final answer must be ONLY a JSON object on one line: {{"p_solve": <number between 0 and 1>, "why": "<under 15 words>"}}"""
 
 
 # ---------------------------------------------------------------- extract
@@ -77,13 +77,16 @@ def cmd_extract(args):
 
 # ---------------------------------------------------------------- score
 
-def parse_p(text):
-    m = re.search(r'"p_solve"\s*:\s*([0-9]*\.?[0-9]+)', text)
-    if not m:
-        m = re.search(r"([01](?:\.\d+)?)", text)
-    if not m:
+def parse_p(text, strict=False):
+    """Last explicit "p_solve": x wins (a reasoning trace may revise itself). Only the
+    final answer field may fall back to a bare number; reasoning text is full of them."""
+    ms = re.findall(r'"?p_solve"?\s*[:=]\s*([0-9]*\.?[0-9]+)', text)
+    if ms:
+        return max(0.0, min(1.0, float(ms[-1])))
+    if strict:
         return None
-    return max(0.0, min(1.0, float(m.group(1))))
+    m = re.search(r"\b(0(?:\.\d+)?|1(?:\.0+)?)\b", text)
+    return max(0.0, min(1.0, float(m.group(1)))) if m else None
 
 
 def cmd_score(args):
@@ -99,8 +102,9 @@ def cmd_score(args):
             for l in out.open(encoding="utf-8"):
                 if l.strip():
                     r = json.loads(l)
-                    done[r["task"]] = r
-        usage_in = usage_out = scored_now = 0
+                    if r.get("p_solve") is not None:      # unparsed replies are retried, not skipped
+                        done[r["task"]] = r
+        usage_in = usage_out = usage_think = scored_now = 0
         with out.open("a", encoding="utf-8") as fh:
             for i, t in enumerate(tasks):
                 if t["task"] in done or not t["instruction"]:
@@ -108,15 +112,21 @@ def cmd_score(args):
                 if args.limit and scored_now >= args.limit:
                     break
                 scored_now += 1
-                reply, usage = nebius.chat(args.model, PROMPT.format(instruction=t["instruction"]))
+                reply, reasoning, usage = nebius.chat(args.model, PROMPT.format(instruction=t["instruction"]))
                 usage_in += usage.get("prompt_tokens", 0)
                 usage_out += usage.get("completion_tokens", 0)
-                r = {"task": t["task"], "p_solve": parse_p(reply), "reply": reply[:300]}
-                done[t["task"]] = r
+                usage_think += (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)
+                p = parse_p(reply)
+                if p is None and reasoning:
+                    p = parse_p(reasoning, strict=True)
+                r = {"task": t["task"], "p_solve": p, "reply": reply[:300],
+                     "reasoning_chars": len(reasoning), "content_chars": len(reply)}
+                if p is not None:
+                    done[t["task"]] = r
                 fh.write(json.dumps(r) + "\n")
                 fh.flush()
-                progress("  %s: %d/%d scored  (%d in / %d out tokens this run)"
-                         % (col, len(done), len(tasks), usage_in, usage_out), i + 1, len(tasks))
+                progress("  %s: %d/%d scored  (%d in / %d out tokens this run, %d of them reasoning)"
+                         % (col, len(done), len(tasks), usage_in, usage_out, usage_think), i + 1, len(tasks))
         report(col, tasks, done, args.model, usage_in, usage_out)
 
 
