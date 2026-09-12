@@ -1,0 +1,9 @@
+data/
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+.nebius_key
+*.db
+*.db-wal
+*.db-shm

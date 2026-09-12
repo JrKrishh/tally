@@ -1,0 +1,11 @@
+[project]
+name = "tally"
+version = "0.0.1"
+description = "Cost-aware evaluation for coding agents: same ranking, a fraction of the spend, with the receipt"
+requires-python = ">=3.8"
+dependencies = ["huggingface_hub>=0.30", "numpy", "requests"]
+license = { text = "MIT" }
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
