@@ -53,6 +53,8 @@ def build(plan, phase, args):
     # collide on the next run. Timestamp every job; report reads the newest.
     job = "tally-%s-%s-%s-%s%s" % (plan["benchmark"], phase, slug,
                                    time.strftime("%Y%m%d-%H%M%S"), "-dry" if args.dry_run else "")
+    if args.job_name:
+        job = args.job_name              # reuse an existing job dir: Harbor resumes its unfinished trials
     cmd = [harbor_bin(), "run",
            "-d", plan["dataset"],
            "-a", "terminus-2",
@@ -85,6 +87,7 @@ def main():
     ap.add_argument("--max-turns", type=int, default=60)
     ap.add_argument("--max-thinking", type=int, default=2048)
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
+    ap.add_argument("--job-name", help="resume: the exact name of an existing job dir under --jobs-dir")
     ap.add_argument("--dry-run", action="store_true", help="validate config and task names; no Docker, no key")
     args = ap.parse_args()
 
