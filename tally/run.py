@@ -87,7 +87,9 @@ def main():
     ap.add_argument("--max-turns", type=int, default=60)
     ap.add_argument("--max-thinking", type=int, default=2048)
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
-    ap.add_argument("--job-name", help="resume: the exact name of an existing job dir under --jobs-dir")
+    ap.add_argument("--job-name", help="resume an existing job dir: Harbor runs only trials with no result yet. "
+                                       "Trials that already ERRORED count as done and are not retried; "
+                                       "delete their dirs first, or start a fresh job")
     ap.add_argument("--dry-run", action="store_true", help="validate config and task names; no Docker, no key")
     args = ap.parse_args()
 
