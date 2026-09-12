@@ -151,8 +151,12 @@ def main():
         r = [x for x, _, _ in atts if x is not None]
         return float(np.mean([1.0 if x >= 1.0 else 0.0 for x in r])) if r else None
 
-    # measured cells
+    # measured cells: the run phase, plus validation cells -- a validated cell was run, so it
+    # is a measurement (one attempt), not a prior any more
     measured = dict((t, rate(a)) for t, a in run.items() if rate(a) is not None)
+    for t, a in val.items():
+        if t not in measured and rate(a) is not None:
+            measured[t] = rate(a)
     tokens_run = sum(tok for a in run.values() for _, tok, _ in a)
     errors = sum(1 for a in list(run.values()) + list(val.values()) for _, _, e in a if e)
     n_attempts = sum(len(a) for a in run.values())
@@ -206,7 +210,7 @@ def main():
     # the honest part: did the skipped cells behave as history predicted?
     if val:
         print("\n  validation of skipped cells (history said certain; we ran them once anyway):")
-        agree = 0
+        side = {"fail": [0, 0], "pass": [0, 0]}          # side -> [agree, total]
         for t, atts in sorted(val.items()):
             r = rate(atts)
             p = prior.get(t)
@@ -214,9 +218,15 @@ def main():
                 continue
             predicted = "pass" if p > hi else "fail"
             actual = "pass" if r >= 0.5 else "fail"
-            agree += predicted == actual
+            side[predicted][1] += 1
+            side[predicted][0] += predicted == actual
             print("   %-34s history %.2f -> predicted %-4s   actual %-4s   %s" % (t[:34], p, predicted, actual, "ok" if predicted == actual else "MISS"))
-        print("  agreement: %d/%d" % (agree, len(val)))
+        total_agree = side["fail"][0] + side["pass"][0]
+        total = side["fail"][1] + side["pass"][1]
+        print("  agreement: %d/%d   fail-side %d/%d   pass-side %d/%d" % (total_agree, total, side["fail"][0], side["fail"][1], side["pass"][0], side["pass"][1]))
+        if side["pass"][1] and side["pass"][0] < side["pass"][1]:
+            print("  history's 'certain pass' is certain for the frontier tier, not for this model:")
+            print("  re-plan skipping only the fail side ->  python -m tally.plan --lo %.2f --hi 1.0" % lo)
 
 
 if __name__ == "__main__":

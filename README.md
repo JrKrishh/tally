@@ -2,10 +2,11 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-Status: **steps 1–4 complete.** The data is validated, the mechanism is measured, the
-cost figure is earned — **Terminal-Bench at 17.7% of the tokens with the six-model
-ranking intact** — and the reasoning model's contribution has been measured against
-what it replaces, including where it fails.
+Status: **steps 1–5.** The data is validated, the mechanism is measured, the cost
+figure is earned in simulation — **Terminal-Bench at 17.7% of the tokens with the
+six-model ranking intact** — and the product now runs real evaluations: Harbor drives
+NVIDIA Nemotron on Nebius Token Factory through the cells the plan chose. The first
+real validation run found the simulation's blind spot in 22 minutes (step 5).
 
 ## The problem
 
@@ -212,6 +213,49 @@ it replaces. Untested, and legitimate as *second* experiments if labelled as suc
 anchoring with a few scored tasks from another benchmark, pairwise "which is harder"
 ranking, and combining the estimate with issue length on SWE-bench Pro.
 
+## Step 5: running it for real
+
+Steps 1–4 are replays of the study's logs. A product plans an evaluation, runs it, and
+reports it — on a model nobody has evaluated. That model is Nemotron itself; it is not
+in the study.
+
+```
+tally plan     history -> which cells to run, how many attempts, what to expect
+tally run      Harbor + Terminus-2 execute exactly those cells: the model on Token Factory, one Docker sandbox per trial
+tally report   measured where run, history where skipped, rank among the six, the receipt, and a check on the cells NOT run
+```
+
+`plan` on Terminal-Bench 2.0 (all 88 study tasks map to TB2 task directories exactly):
+57 tasks with uncertain difficulty × 3 attempts, 31 skipped as certain, 8 of those run
+once anyway as a check, plus `query-optimize`, which has no history and therefore runs.
+
+**Two real trials** of `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` on `adaptive-rejection-sampler`
+(prior 0.30): 39 agent steps, 11–12 minutes, verifier 0/9 — while the agent's final
+message said the implementation was *"fully developed to meet all specified
+requirements."* Harbor's receipt: **616K prompt tokens, 48K completion, 79% of the
+prompt served from cache.** ~664K tokens per attempt; the full plan is ~121M, a third
+of what frontier-model trajectory lengths implied.
+
+### The validation run, and what it caught
+
+Eight cells history called certain, run once each. 22 minutes.
+
+| history said | tasks | Nemotron Nano actually |
+|---|---|---|
+| near-certain fail (0.00) | 4 | **failed 4 of 4** |
+| near-certain pass (0.91–1.00) | 4 | **passed 1 of 4** |
+
+The fail side transfers: what frontier models cannot do, a 30B model cannot do either.
+The pass side does not: "95% certain" was 95% certain *for the frontier tier*. Step 3's
+simulation was leave-one-out among six models of the same tier, so it could never have
+seen this, and the estimate it would have produced for Nemotron was inflated by 21
+near-pass tasks imputed at ~0.95 against a real rate nearer one in four.
+
+That is the whole reason the validate phase exists, and it changes the product: for a
+model of unknown tier, **skip only on the fail side** (`plan --hi 1.0`). The pass side
+runs until the model has earned its own history. Ten tasks skipped instead of thirty-one;
+the saving is smaller and the estimate is honest.
+
 ## Reproduce
 
 ```bash
@@ -225,6 +269,10 @@ python -m tally.select                       # step 3: the policy table
 python -m tally.coldstart extract            # step 4: task text + true difficulty
 NEBIUS_API_KEY=... python -m tally.coldstart score   # step 4: Nemotron on Token Factory, resumable
 python -m tally.coldstart report             # step 4: re-analyse scores on disk, spends nothing
+python -m tally.plan --lo 0.10 --hi 1.0      # step 5: cells to run for a new model, skipping only the fail side
+python -m tally.run --plan data/plan_terminalbench.json --phase validate -n 4   # step 5: check the skipped cells (Docker + NEBIUS_API_KEY)
+python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4        # step 5: the real evaluation
+python -m tally.report --plan data/plan_terminalbench.json                      # step 5: accuracy, rank, receipt, validation
 ```
 
 `snapshot_download` does not work on this datastore — the Hub returns an empty
