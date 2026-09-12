@@ -44,9 +44,9 @@ cat <<'EOF'
 Next, in a NEW login shell (so the docker group applies):
   export NEBIUS_API_KEY=...            # or write it to ~/tally/.nebius_key
   cd ~/tally && . .venv/bin/activate
-  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/nemotron-3-nano-30b-a3b --limit 1 --attempts 1
+  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --limit 1 --attempts 1
 Measure tokens per attempt from that one trial before committing to the full plan:
   python -m tally.report --plan data/plan_terminalbench.json
 Then, inside tmux so it survives disconnects:
-  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/nemotron-3-nano-30b-a3b --phase all -n 4
+  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --phase all -n 4
 EOF

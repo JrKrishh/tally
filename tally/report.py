@@ -83,7 +83,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", required=True)
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
-    ap.add_argument("--model", default="nvidia/nemotron-3-nano-30b-a3b")
+    ap.add_argument("--model", default="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     ap.add_argument("--inspect", action="store_true", help="dump the structure of the first trial result and exit")
     args = ap.parse_args()
     plan = json.load(open(args.plan))

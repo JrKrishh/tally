@@ -7,9 +7,9 @@ cells the plan chose are executed. Two phases, two Harbor jobs:
   run       the uncertain tasks, at the plan's attempt cap
   validate  a few tasks history called certain, once each, to check the imputation
 
-  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/nemotron-3-nano-30b-a3b --dry-run
-  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/nemotron-3-nano-30b-a3b --limit 1 --attempts 1
-  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/nemotron-3-nano-30b-a3b --phase all
+  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --dry-run
+  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --limit 1 --attempts 1
+  python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --phase all
 
 The key is read from NEBIUS_API_KEY (or .nebius_key) and handed to Harbor's
 process environment as OPENAI_API_KEY. It never appears on a command line or
@@ -77,7 +77,7 @@ def build(plan, phase, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", required=True)
-    ap.add_argument("--model", default="nvidia/nemotron-3-nano-30b-a3b", help="Token Factory model id")
+    ap.add_argument("--model", default="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", help="Token Factory model id")
     ap.add_argument("--phase", choices=["run", "validate", "all"], default="run")
     ap.add_argument("--attempts", type=int, help="override the plan's attempt cap for the run phase")
     ap.add_argument("--limit", type=int, help="first N tasks only (smoke test)")
