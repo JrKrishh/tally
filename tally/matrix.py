@@ -1,9 +1,11 @@
 """Rebuild the model x task x attempts matrix two ways and diff them.
 
 The aggregates (small) list each shard's sample_ids and encode epochs in the
-evaluation_name ("terminalbench/S-adaptive/+8ep"), so the matrix can be inferred
-without the samples. The samples (7.4 GB) are ground truth. If the two disagree,
-the inference was wrong somewhere and everything downstream inherits the error.
+evaluation_name ("terminalbench/S-adaptive/+8ep"), so the matrix looks inferable
+without the samples. It is not: adaptive sampling makes +Nep a ceiling, and some
+shards carry rows with no task list. The aggregates undercount attempts 2-3x on
+every (model, task) pair. The samples (7.4 GB) are the only ground truth; the
+aggregate path is kept as the cross-check that proved it.
 
   python -m tally.matrix                       # both sources, diff, consistency
   python -m tally.matrix --source aggregates   # works before the big pull finishes
@@ -26,7 +28,8 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 EP = re.compile(r"/([^/]+)/\+(\d+)ep")
-ATTEMPT_FIELDS = ["collection", "model", "task", "score", "is_correct", "turns", "tool_calls",
+ATTEMPT_FIELDS = ["collection", "model", "task", "shard", "strategy", "epochs",
+                  "score", "is_correct", "turns", "tool_calls",
                   "input_tokens", "output_tokens", "reasoning_tokens", "total_tokens", "latency_ms", "error"]
 
 
@@ -59,6 +62,18 @@ def from_aggregates(col):
 
 # ---------------------------------------------------------------- samples
 
+def shard_config(agg_path):
+    """(strategy, max epochs) from a shard's aggregate JSON; ('?', None) if unparseable."""
+    if not agg_path.exists():
+        return "?", None
+    a = json.loads(agg_path.read_text(encoding="utf-8"))
+    for er in a.get("evaluation_results", []):
+        m = EP.search(er.get("evaluation_name", ""))
+        if m:
+            return m.group(1), int(m.group(2))
+    return "?", None
+
+
 def from_samples(col):
     """-> cover[model][task] = attempts, plus the flat attempts list."""
     cover = collections.defaultdict(collections.Counter)
@@ -66,6 +81,8 @@ def from_samples(col):
     files = sorted((DATA / "data" / col).rglob("*_samples.jsonl"))
     for i, p in enumerate(files):
         model = p.parent.parent.name + "/" + p.parent.name
+        shard = p.name[:-len("_samples.jsonl")]
+        strategy, epochs = shard_config(p.parent / (shard + ".json"))
         with p.open(encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 if not line.strip():
@@ -78,6 +95,7 @@ def from_samples(col):
                 cover[model][task] += 1
                 rows.append({
                     "collection": col, "model": model, "task": task,
+                    "shard": shard[:8], "strategy": strategy, "epochs": epochs,
                     "score": ev.get("score"), "is_correct": ev.get("is_correct"),
                     "turns": ev.get("num_turns"), "tool_calls": ev.get("tool_calls_count"),
                     "input_tokens": tu.get("input_tokens"), "output_tokens": tu.get("output_tokens"),
@@ -131,23 +149,34 @@ def diff(col, agg, smp):
 
 
 def consistency(col, rows):
-    per = collections.defaultdict(list)
-    for r in rows:
-        per[(r["model"], r["task"])].append(r)
-    multi = {k: v for k, v in per.items() if len(v) >= 2}
-    flips = sum(1 for v in multi.values() if len(set(passed(r["score"]) for r in v)) > 1)
-    ratios = []
-    for v in multi.values():
-        toks = [r["total_tokens"] for r in v if passed(r["score"]) and r["total_tokens"]]
-        if len(toks) >= 2:
-            ratios.append(max(toks) / float(min(toks)))
+    """Repeat-attempt disagreement and cost spread, pooled and within-shard.
+
+    Pooled mixes attempts from different shards, i.e. different strategies and
+    token budgets -- the study's own interventions. Within-shard holds the config
+    fixed, so what remains is closer to stochastic variance. Report both; only the
+    within-shard number is a claim about the agent rather than about the study.
+    """
+    def report(label, keyfn):
+        per = collections.defaultdict(list)
+        for r in rows:
+            per[keyfn(r)].append(r)
+        multi = {k: v for k, v in per.items() if len(v) >= 2}
+        flips = sum(1 for v in multi.values() if len(set(passed(r["score"]) for r in v)) > 1)
+        ratios = []
+        for v in multi.values():
+            toks = [r["total_tokens"] for r in v if passed(r["score"]) and r["total_tokens"]]
+            if len(toks) >= 2:
+                ratios.append(max(toks) / float(min(toks)))
+        print("  %-28s groups>=2: %5d   disagree on pass/fail: %4d (%3.0f%%)"
+              % (label, len(multi), flips, 100.0 * flips / len(multi) if multi else 0))
+        if ratios:
+            rs = sorted(ratios)
+            print("  %-28s passing-attempt token spread: median %.1fx  p90 %.1fx  max %.1fx  (n=%d)"
+                  % ("", statistics.median(rs), rs[int(0.9 * (len(rs) - 1))], rs[-1], len(rs)))
+
     print("\n## %s: consistency across repeated attempts" % col)
-    print("  (model, task) pairs with >=2 attempts: %d" % len(multi))
-    if multi:
-        print("  pairs whose attempts DISAGREE on pass/fail: %d  (%.0f%%)" % (flips, 100.0 * flips / len(multi)))
-    if ratios:
-        print("  token cost spread among PASSING attempts of the same (model, task): median %.1fx, p90 %.1fx, max %.1fx  (n=%d)"
-              % (statistics.median(ratios), sorted(ratios)[int(0.9 * (len(ratios) - 1))], max(ratios), len(ratios)))
+    report("pooled (model, task)", lambda r: (r["model"], r["task"]))
+    report("within (model, task, shard)", lambda r: (r["model"], r["task"], r["shard"]))
 
 
 def main():
