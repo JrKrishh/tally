@@ -44,6 +44,22 @@ def harbor_bin():
     return found
 
 
+MIN_FREE_GB = 30
+
+
+def preflight(args):
+    """Fail in seconds, not after 237 errored trials: the key must answer, the model
+    must exist, and the disk must have room for task images."""
+    free_gb = shutil.disk_usage(args.jobs_dir if os.path.isdir(args.jobs_dir) else str(ROOT)).free / 1e9
+    if free_gb < MIN_FREE_GB:
+        sys.exit("preflight: only %.0f GB free where jobs are written; need %d GB for task images" % (free_gb, MIN_FREE_GB))
+    try:
+        text, _, usage = nebius.chat(args.model, "Reply with the single word OK.", max_tokens=8)
+    except SystemExit as e:
+        sys.exit("preflight: the model call failed before any trial started -> %s" % e)
+    print("## preflight ok: %s answered (%s tokens), %.0f GB free" % (args.model, usage.get("total_tokens", "?"), free_gb))
+
+
 def build(plan, phase, args):
     tasks = list(plan["tasks_run"]) + list(plan.get("tasks_no_history", [])) if phase == "run" else list(plan["tasks_validate"])
     if args.limit:
@@ -67,6 +83,8 @@ def build(plan, phase, args):
            "-n", str(args.concurrent),
            "-o", args.jobs_dir,
            "--job-name", job,
+           "--max-retries", "1",                     # one retry on transient infra errors
+           "--retry-exclude", "AgentTimeoutError",   # a timeout is a real outcome, not a hiccup
            "-y"]
     if args.max_thinking:
         cmd += ["--ak", "max_thinking_tokens=%d" % args.max_thinking]
@@ -95,6 +113,8 @@ def main():
     args = ap.parse_args()
 
     plan = json.load(open(args.plan))
+    if not args.dry_run:
+        preflight(args)
     env = dict(os.environ)
     # Harbor writes trial results with Path.write_text() and no encoding. On Windows
     # that is cp1252, and the first model reply containing a character outside it
