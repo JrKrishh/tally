@@ -8,3 +8,5 @@ __pycache__/
 *.db-wal
 *.db-shm
 jobs/
+nebius_key*
+*nebius*key*.txt
