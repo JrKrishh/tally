@@ -17,6 +17,9 @@ def key():
                   Path.home() / ".claude" / "session-rag" / ".nebius_key"):
             if p.exists():
                 k = p.read_text(encoding="utf-8").strip()
+                if not k:
+                    sys.exit("%s exists but is empty (a paste that never landed?). "
+                             "Write the key into it, or set NEBIUS_API_KEY." % p)
                 break
     if not k:
         sys.exit("NEBIUS_API_KEY not set.\n  PowerShell:  $env:NEBIUS_API_KEY = '<key>'\n"
