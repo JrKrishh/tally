@@ -168,6 +168,15 @@ def test_recovers_the_answer_filed_as_reasoning():
     assert decisions == ["accepted"], decisions
 
 
+def test_an_outline_in_reasoning_is_not_recovered():
+    outline = json.dumps({"analysis": "a", "plan": "p", "commands": [{"keystrokes": "cat > f.v <<'EOF'...EOF\n"}]})
+    model, log, decisions, container, _ = run(
+        [("", "Here is the plan:\n" + outline), turn(False, ["touch /app/out.txt\n"]), turn(True)], WORKS)
+    assert log["recovered_turns"] == 0
+    assert model.prompts[1].startswith("Previous response had parsing errors")
+    assert decisions == ["accepted"], decisions
+
+
 def test_recovery_can_be_switched_off():
     model, log, decisions, container, _ = run(
         [in_reasoning(turn(False, ["touch /app/out.txt\n"])), turn(False, ["touch /app/out.txt\n"]), turn(True)],

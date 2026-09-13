@@ -115,6 +115,15 @@ def compare(args):
         boots.append(sum(pick) / len(pick))
     boots.sort()
     n = len(tasks)
+    if args.table:
+        print("%-34s %9s %9s  %-6s %5s %9s  %s" % ("task", "stock", "layer", "turns", "recov", "timeouts", "claim decisions"))
+        for t in tasks:
+            rs = [r for r in rows if r["task"] == t]
+            dec = [" > ".join(rd["decision"] for rd in r["checks"]["rounds"]) or "-" for r in rs if r["checks"]]
+            print("%-34s %4d/%-4d %4d/%-4d  %-6s %5s %9d  %s" % (
+                t[:34], base[t]["passes"], base[t]["attempts"], new[t]["passes"], new[t]["attempts"],
+                "/".join(str(r["turns"]) for r in rs), "/".join(str((r["checks"] or {}).get("recovered_turns", "-")) for r in rs),
+                sum(r["timeout"] for r in rs), " | ".join(dec)))
     print("## %s: %d tasks from %s, %d trials with a verdict" % (Path(args.job).name, n, "+".join(halves), len(rows)))
     print("   pass rate (mean over tasks): stock %.3f -> layer %.3f   paired difference %+.3f  95%% CI [%+.3f, %+.3f]"
           % (sum(rate(base[t]) for t in tasks) / n, sum(rate(new[t]) for t in tasks) / n,
@@ -166,6 +175,7 @@ def main():
     sub.add_parser("split")
     c = sub.add_parser("compare")
     c.add_argument("job", help="job dir of the layered agent")
+    c.add_argument("--table", action="store_true", help="one row per task first")
     args = ap.parse_args()
     {"split": split, "compare": compare}[args.cmd](args)
 

@@ -124,6 +124,8 @@ def build(plan, phase, args):
         cmd += ["--ak", "max_thinking_tokens=%d" % args.max_thinking]
     for kv in args.ak:
         cmd += ["--ak", kv]
+    if args.build_timeout_multiplier:
+        cmd += ["--environment-build-timeout-multiplier", str(args.build_timeout_multiplier)]
     for t in tasks:
         cmd += ["-i", t]
     if args.dry_run:
@@ -144,6 +146,9 @@ def main():
     ap.add_argument("--tasks", nargs="+", metavar="TASK", help="only these of the phase's tasks")
     ap.add_argument("-n", "--concurrent", type=int, default=2)
     ap.add_argument("--max-turns", type=int, default=60)
+    ap.add_argument("--build-timeout-multiplier", type=float,
+                    help="more time to pull and start a task image (Harbor's default is 600 s for most tasks); "
+                         "multi-GB images miss it on a slow link. Does not change the agent's time")
     ap.add_argument("--max-thinking", type=int, default=2048,
                     help="passed to Harbor as max_thinking_tokens; Harbor applies it only to Anthropic models, "
                          "so for Nemotron it changes nothing. Kept so configs match the recorded runs")
