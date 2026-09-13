@@ -11,6 +11,10 @@ cells the plan chose are executed. Two phases, two Harbor jobs:
   python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --limit 1 --attempts 1
   python -m tally.run --plan data/plan_terminalbench.json --model nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B --phase all
 
+A layer around the agent is evaluated on a locked half of the tasks instead of the plan:
+
+  python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checked:CheckedTerminus
+
 The key is read from NEBIUS_API_KEY (or .nebius_key) and handed to Harbor's
 process environment as OPENAI_API_KEY. It never appears on a command line or
 in a config file. --dry-run needs no key and no Docker.
@@ -31,6 +35,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
+SPLIT = ROOT / "splits" / "terminalbench.json"
 
 
 def harbor_bin():
@@ -82,11 +87,19 @@ def preflight(args):
 
 
 def build(plan, phase, args):
-    tasks = list(plan["tasks_run"]) + list(plan.get("tasks_no_history", [])) if phase == "run" else list(plan["tasks_validate"])
+    if phase in ("dev", "heldout"):
+        tasks, attempts = json.load(open(SPLIT, encoding="utf-8"))[phase], args.attempts or 1
+    elif phase == "run":
+        tasks, attempts = list(plan["tasks_run"]) + list(plan.get("tasks_no_history", [])), args.attempts or plan["attempts"]
+    else:
+        tasks, attempts = list(plan["tasks_validate"]), 1
+    if args.tasks:
+        tasks = [t for t in tasks if t in args.tasks]
     if args.limit:
         tasks = tasks[:args.limit]
-    attempts = (args.attempts or plan["attempts"]) if phase == "run" else 1
     slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model).strip("-")
+    if args.agent != "terminus-2":       # before the model, so report's stock-agent prefix never matches
+        slug = re.sub(r"[^A-Za-z0-9]+", "-", args.agent.split(":")[-1]).strip("-") + "-" + slug
     # Harbor writes a job dir even for a dry run and locks it; a fixed name would
     # collide on the next run. Timestamp every job; report reads the newest.
     job = "tally-%s-%s-%s-%s%s" % (plan["benchmark"], phase, slug,
@@ -95,7 +108,7 @@ def build(plan, phase, args):
         job = args.job_name              # reuse an existing job dir: Harbor resumes its unfinished trials
     cmd = [harbor_bin(), "run",
            "-d", plan["dataset"],
-           "-a", "terminus-2",
+           "-a", args.agent,
            "-m", "openai/" + args.model,
            "--ak", "api_base=" + nebius.API,
            "--ak", "max_turns=%d" % args.max_turns,
@@ -109,6 +122,8 @@ def build(plan, phase, args):
            "-y"]
     if args.max_thinking:
         cmd += ["--ak", "max_thinking_tokens=%d" % args.max_thinking]
+    for kv in args.ak:
+        cmd += ["--ak", kv]
     for t in tasks:
         cmd += ["-i", t]
     if args.dry_run:
@@ -121,11 +136,17 @@ def main():
     ap.add_argument("--plan", required=True)
     ap.add_argument("--model", default="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", help="Token Factory model id")
     ap.add_argument("--phase", choices=["run", "validate", "all"], default="run")
+    ap.add_argument("--split", choices=["dev", "heldout"], help="run this half of splits/terminalbench.json instead of the plan's tasks")
+    ap.add_argument("--agent", default="terminus-2", help="Harbor agent name, or module:Class, e.g. tally.checked:CheckedTerminus")
+    ap.add_argument("--ak", action="append", default=[], metavar="KEY=VALUE", help="extra agent kwarg, e.g. max_rejections=2")
     ap.add_argument("--attempts", type=int, help="override the plan's attempt cap for the run phase")
     ap.add_argument("--limit", type=int, help="first N tasks only (smoke test)")
+    ap.add_argument("--tasks", nargs="+", metavar="TASK", help="only these of the phase's tasks")
     ap.add_argument("-n", "--concurrent", type=int, default=2)
     ap.add_argument("--max-turns", type=int, default=60)
-    ap.add_argument("--max-thinking", type=int, default=2048)
+    ap.add_argument("--max-thinking", type=int, default=2048,
+                    help="passed to Harbor as max_thinking_tokens; Harbor applies it only to Anthropic models, "
+                         "so for Nemotron it changes nothing. Kept so configs match the recorded runs")
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
     ap.add_argument("--job-name", help="resume an existing job dir: Harbor runs only trials with no result yet. "
                                        "Trials that already ERRORED count as done and are not retried; "
@@ -151,12 +172,14 @@ def main():
     # Python's UTF-8 mode makes every default-encoded open() UTF-8.
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+    if ":" in args.agent:                # Harbor runs in its own venv; let it import this repo's agent
+        env["PYTHONPATH"] = os.pathsep.join(p for p in (str(ROOT), env.get("PYTHONPATH")) if p)
     if not args.dry_run:
         env["OPENAI_API_KEY"] = nebius.key()
     else:
         env.setdefault("OPENAI_API_KEY", "dry-run")
 
-    phases = ["run", "validate"] if args.phase == "all" else [args.phase]
+    phases = [args.split] if args.split else ["run", "validate"] if args.phase == "all" else [args.phase]
     for phase in phases:
         job, tasks, attempts, cmd = build(plan, phase, args)
         print("## %s: %d tasks x %d attempts -> %s%s" % (phase, len(tasks), attempts, job, "  [dry run]" if args.dry_run else ""))

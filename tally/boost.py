@@ -96,12 +96,78 @@ def split(args):
     print("wrote", SPLIT)
 
 
+def compare(args):
+    from .site import PRICE_IN, PRICE_OUT
+    s = json.load(open(SPLIT, encoding="utf-8"))
+    rows = trials(args.job)
+    new = per_task(rows)
+    tasks = sorted(new)
+    base = s["baseline"]
+    outside = [t for t in tasks if t not in base]
+    if outside:
+        sys.exit("tasks with no baseline: %s" % outside)
+    halves = sorted(set(h for t in tasks for h in ("dev", "heldout") if t in s[h]))
+    rate = lambda b: b["passes"] / b["attempts"]
+    diffs = [rate(new[t]) - rate(base[t]) for t in tasks]
+    rng, boots = random.Random(0), []
+    for _ in range(4000):
+        pick = [rng.choice(diffs) for _ in diffs]
+        boots.append(sum(pick) / len(pick))
+    boots.sort()
+    n = len(tasks)
+    print("## %s: %d tasks from %s, %d trials with a verdict" % (Path(args.job).name, n, "+".join(halves), len(rows)))
+    print("   pass rate (mean over tasks): stock %.3f -> layer %.3f   paired difference %+.3f  95%% CI [%+.3f, %+.3f]"
+          % (sum(rate(base[t]) for t in tasks) / n, sum(rate(new[t]) for t in tasks) / n,
+             sum(diffs) / n, boots[100], boots[3899]))
+    gained = [t for t in tasks if new[t]["passes"] and not base[t]["passes"]]
+    lost = [t for t in tasks if base[t]["passes"] and not new[t]["passes"]]
+    print("   solved only with the layer: %s" % (", ".join(gained) or "none"))
+    print("   solved only by stock:       %s" % (", ".join(lost) or "none"))
+    bc, bf = sum(base[t]["claims"] for t in tasks), sum(base[t]["false_claims"] for t in tasks)
+    nc, nf = sum(new[t]["claims"] for t in tasks), sum(new[t]["false_claims"] for t in tasks)
+    print("   runs ending in a claim that failed the tests: stock %d/%d (%.0f%%) -> layer %d/%d (%.0f%%)"
+          % (bf, bc, 100.0 * bf / max(bc, 1), nf, nc, 100.0 * nf / max(nc, 1)))
+
+    logged = [r for r in rows if r["checks"] is not None]
+    if logged:
+        decisions = {}
+        for r in logged:
+            for rd in r["checks"]["rounds"]:
+                decisions[rd["decision"]] = decisions.get(rd["decision"], 0) + 1
+        written = [len([c for c in (r["checks"]["rounds"][0]["results"] if r["checks"]["rounds"] else [])]) for r in logged]
+        no_checks = sum(1 for r in logged if r["checks"]["rounds"] and not any(
+            c["status"] in ("pass", "fail") for c in r["checks"]["rounds"][0]["results"]))
+        print("   layer: %d trials, claim decisions %s, usable checks missing in %d, checks per trial %.1f"
+              % (len(logged), decisions, no_checks, sum(written) / len(logged)))
+        # Does the layer's last verdict agree with the hidden tests?
+        m = {(True, True): 0, (True, False): 0, (False, True): 0, (False, False): 0}
+        for r in logged:
+            usable = [c for c in (r["checks"]["rounds"][-1]["results"] if r["checks"]["rounds"] else [])
+                      if c["status"] in ("pass", "fail")]
+            if usable:
+                m[(all(c["status"] == "pass" for c in usable), r["passed"])] += 1
+        print("   last verdict vs hidden tests: checks pass & tests pass %d, checks pass & tests fail %d, "
+              "checks fail & tests pass %d, checks fail & tests fail %d"
+              % (m[(True, True)], m[(True, False)], m[(False, True)], m[(False, False)]))
+
+    turns = lambda rs: sum(r["turns"] for r in rs) / max(len(rs), 1)
+    usd = lambda rs: sum(r["tokens_in"] * PRICE_IN + r["tokens_out"] * PRICE_OUT for r in rs) / max(len(rs), 1)
+    bj = ROOT / "jobs" / s["baseline_job"]
+    if bj.exists():
+        brows = [r for r in trials(bj) if r["task"] in new]
+        print("   per trial: stock %.1f turns, $%.4f, %d timeouts in %d  ->  layer %.1f turns, $%.4f, %d timeouts in %d"
+              % (turns(brows), usd(brows), sum(r["timeout"] for r in brows), len(brows),
+                 turns(rows), usd(rows), sum(r["timeout"] for r in rows), len(rows)))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("split")
+    c = sub.add_parser("compare")
+    c.add_argument("job", help="job dir of the layered agent")
     args = ap.parse_args()
-    {"split": split}[args.cmd](args)
+    {"split": split, "compare": compare}[args.cmd](args)
 
 
 if __name__ == "__main__":

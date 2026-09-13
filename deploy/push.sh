@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 ssh "$VM" 'mkdir -p ~/tally/data ~/tally/deploy'
 scp deploy/vm.sh "$VM:~/tally/deploy/"
-scp -r tally pyproject.toml LICENSE README.md "$VM:~/tally/"
+scp -r tally splits tests pyproject.toml LICENSE README.md "$VM:~/tally/"
 scp data/plan_terminalbench.json data/attempts_terminalbench.csv data/tb2_task_ids.json "$VM:~/tally/data/"
 ssh "$VM" 'rm -rf ~/tally/tally/__pycache__; bash ~/tally/deploy/vm.sh'
 
