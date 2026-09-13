@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tally</title>
+<meta name="description" content="Tally ranks coding agents without paying for the whole benchmark: it runs only the cells whose outcome is uncertain and reports the ranking with a receipt. Live planner over 13,915 frontier-model trajectories, plus a real Terminal-Bench 2.0 run of NVIDIA Nemotron 3 Nano on Nebius Token Factory.">
+<meta property="og:title" content="Tally">
+<meta property="og:description" content="Same ranking, a fraction of the spend, with the receipt. Terminal-Bench 2.0 at 17.7% of the tokens; Nemotron 3 Nano measured for real at 0.079 for $3.92.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --paper: #ffffff;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #6d6b65;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.10);
+  --accent: #2a78d6;
+  --accent-est: #2a78d6;
+  --accent-soft: #86b6ef;
+  --link: #1c5cab;
+  --deemph: #bfbeb4;
+  --cell-fail: #dcdad1;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --warn: #fab219;
+  --warn-ink: #7a5200;
+  --critical-ink: #b42f2f;
+  --tip-bg: #0b0b0b;
+  --tip-ink: #ffffff;
+  --tip-muted: #c3c2b7;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --paper: #1f1f1d;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #9a988f;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --accent: #3987e5;
+    --accent-est: #5598e7;
+    --accent-soft: #184f95;
+    --link: #86b6ef;
+    --deemph: #4a4944;
+    --cell-fail: #34342f;
+    --good: #0ca30c;
+    --good-ink: #3cc13c;
+    --warn: #fab219;
+    --warn-ink: #fab219;
+    --critical-ink: #e66767;
+    --tip-bg: #fcfcfb;
+    --tip-ink: #0b0b0b;
+    --tip-muted: #52514e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --paper: #1f1f1d;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --muted: #9a988f;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.10);
+  --accent: #3987e5;
+  --accent-est: #5598e7;
+  --accent-soft: #184f95;
+  --link: #86b6ef;
+  --deemph: #4a4944;
+  --cell-fail: #34342f;
+  --good: #0ca30c;
+  --good-ink: #3cc13c;
+  --warn: #fab219;
+  --warn-ink: #fab219;
+  --critical-ink: #e66767;
+  --tip-bg: #fcfcfb;
+  --tip-ink: #0b0b0b;
+  --tip-muted: #52514e;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 400 16px/1.55 var(--sans);
+}
+a { color: var(--link); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px;
+}
+code, .mono { font-family: var(--mono); font-size: 0.9em; }
+h1, h2, h3 { font-family: var(--cond); font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4.6vw, 44px); line-height: 1.08; }
+h2 { font-size: 30px; line-height: 1.15; }
+h3 { font-size: 17px; line-height: 1.3; font-family: var(--sans); letter-spacing: 0; }
+p { margin: 0; }
+.wrap { width: min(1120px, 100% - 40px); margin: 0 auto; }
+.eyebrow { font: 500 12px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--ink-2); font-size: 17px; max-width: 64ch; }
+.note { color: var(--muted); font-size: 13px; max-width: 72ch; }
+
+/* top bar */
+.top { border-bottom: 1px solid var(--border); background: var(--surface); }
+.top .wrap { display: flex; align-items: center; gap: 24px; height: 56px; }
+.brand { font: 600 22px/1 var(--cond); letter-spacing: -0.01em; color: var(--ink); text-decoration: none; display: flex; align-items: baseline; gap: 10px; }
+.brand small { font: 400 13px/1 var(--mono); color: var(--muted); letter-spacing: 0; }
+.top nav { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
+.top nav a { color: var(--ink-2); text-decoration: none; }
+.top nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* intro */
+.intro { padding: 48px 0 28px; display: grid; gap: 14px; }
+.intro .lede { margin-top: 4px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 6px; font: 400 13px/1.4 var(--mono); color: var(--muted); }
+
+section { padding: 44px 0; border-top: 1px solid var(--border); }
+section > .wrap > header { display: grid; gap: 10px; margin-bottom: 24px; }
+
+/* controls */
+.controls { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: end; padding: 16px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.control { display: grid; gap: 8px; }
+.control > .label { font: 500 12px/1 var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--page); }
+.seg button {
+  font: 500 14px/1 var(--sans); color: var(--ink-2); background: transparent; border: 0; padding: 9px 12px; cursor: pointer;
+  border-right: 1px solid var(--border);
+}
+.seg button:last-child { border-right: 0; }
+.seg button:hover { color: var(--ink); background: var(--grid); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); }
+.range { display: flex; align-items: center; gap: 12px; }
+.range input { width: 170px; accent-color: var(--accent); }
+.range output { font: 500 14px/1 var(--sans); font-variant-numeric: tabular-nums; min-width: 12ch; color: var(--ink); }
+
+/* planner results */
+.planner { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 20px; margin-top: 18px; }
+@media (max-width: 860px) { .planner { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; min-width: 0; }
+.hero-figure { display: grid; gap: 6px; }
+.hero-figure .value { font: 600 56px/1 var(--sans); letter-spacing: -0.02em; }
+.hero-figure .caption { color: var(--ink-2); font-size: 15px; }
+.meter { height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; margin: 14px 0 6px; }
+.meter > span { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width 240ms ease; }
+.meter-scale { display: flex; justify-content: space-between; font: 400 12px/1 var(--mono); color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 500 13px/1 var(--sans); padding: 6px 10px 6px 8px; border-radius: 999px; border: 1px solid var(--border); width: fit-content; }
+.pill svg { width: 14px; height: 14px; flex: none; }
+.pill.good { color: var(--good-ink); }
+.pill.warn { color: var(--warn-ink); }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-top: 18px; }
+.tile { background: var(--surface); padding: 12px 14px; display: grid; gap: 4px; align-content: start; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font: 600 22px/1.15 var(--sans); }
+.tile .s { font-size: 12px; color: var(--ink-2); }
+
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; margin-bottom: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.legend i.sq { border-radius: 2px; }
+.chart { width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--sans); }
+.tablebox { margin-top: 12px; }
+.tablebox summary { cursor: pointer; font-size: 13px; color: var(--ink-2); width: fit-content; }
+.tablebox .scroll { overflow-x: auto; margin-top: 10px; }
+table { border-collapse: collapse; font-size: 13px; width: 100%; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.callout { font-size: 13px; color: var(--ink-2); margin-top: 12px; padding-left: 12px; border-left: 2px solid var(--axis); max-width: 72ch; }
+
+/* real run */
+.run-grid { display: grid; grid-template-columns: 1fr minmax(300px, 360px); gap: 20px; align-items: start; }
+@media (max-width: 940px) { .run-grid { grid-template-columns: 1fr; } }
+.stack { display: grid; gap: 20px; min-width: 0; }
+.split { display: grid; grid-template-columns: minmax(0, 200px) 1fr; gap: 20px; align-items: start; }
+@media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+.stat-big .v { font: 600 44px/1 var(--sans); letter-spacing: -0.01em; }
+.stat-big .k { color: var(--ink-2); font-size: 15px; margin-top: 8px; }
+.grid-foot { font: 400 12px/1.4 var(--mono); color: var(--muted); margin-top: 8px; }
+
+/* the receipt */
+.receipt {
+  position: relative; background: var(--paper); color: var(--ink);
+  font: 400 13px/1.55 var(--mono); padding: 22px 20px 26px;
+  box-shadow: 0 1px 0 var(--border), 0 12px 28px -18px rgba(0, 0, 0, 0.35);
+  --tooth: 8px;
+  -webkit-mask: radial-gradient(circle at 50% 100%, transparent calc(var(--tooth) * 0.55), #000 calc(var(--tooth) * 0.55 + 0.5px)) 0 100% / var(--tooth) var(--tooth) repeat-x,
+                linear-gradient(#000, #000) 0 0 / 100% calc(100% - var(--tooth)) no-repeat;
+          mask: radial-gradient(circle at 50% 100%, transparent calc(var(--tooth) * 0.55), #000 calc(var(--tooth) * 0.55 + 0.5px)) 0 100% / var(--tooth) var(--tooth) repeat-x,
+                linear-gradient(#000, #000) 0 0 / 100% calc(100% - var(--tooth)) no-repeat;
+}
+.receipt .r-title { font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; }
+.receipt .r-sub { text-align: center; color: var(--muted); font-size: 12px; margin-top: 2px; word-break: break-all; }
+.receipt hr { border: 0; border-top: 1px dashed var(--axis); margin: 12px 0; }
+.receipt hr.double { border-top: 3px double var(--axis); }
+.receipt .row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.receipt .row.sub { color: var(--muted); padding-left: 12px; }
+.receipt .row.total { font-weight: 500; font-size: 15px; }
+.receipt .r-foot { color: var(--muted); font-size: 11px; text-align: center; margin-top: 12px; }
+
+/* found by running */
+.found { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.found .panel h3 { margin-bottom: 8px; }
+.found .panel p { color: var(--ink-2); font-size: 15px; }
+.mark-ok, .mark-miss { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+.mark-ok { color: var(--good-ink); }
+.mark-miss { color: var(--critical-ink); }
+.mark-ok svg, .mark-miss svg { width: 13px; height: 13px; }
+
+/* how it works */
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; counter-reset: step; }
+.step { display: grid; gap: 10px; align-content: start; }
+.step .n { font: 600 13px/1 var(--mono); color: var(--muted); }
+.step p { color: var(--ink-2); font-size: 15px; }
+pre.cmd { margin: 0; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font: 400 12.5px/1.5 var(--mono); overflow-x: auto; white-space: pre; color: var(--ink); }
+.stackline { margin-top: 26px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.stackline div { background: var(--surface); padding: 12px 14px; font-size: 14px; color: var(--ink-2); }
+.stackline b { display: block; color: var(--ink); font-weight: 600; font-size: 14px; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
+ul.limits { margin: 0; padding-left: 18px; color: var(--ink-2); display: grid; gap: 8px; font-size: 15px; }
+
+footer { border-top: 1px solid var(--border); padding: 26px 0 40px; color: var(--muted); font-size: 13px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
+
+#tip {
+  position: fixed; z-index: 10; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink);
+  font: 400 12px/1.45 var(--sans); padding: 8px 10px; border-radius: 6px; max-width: 280px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+#tip b { font-weight: 600; font-size: 14px; display: block; }
+#tip .m { color: var(--tip-muted); }
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="wrap">
+    <a class="brand" href="#">Tally <small>cost-aware agent evals</small></a>
+    <nav aria-label="Sections">
+      <a href="#planner">Planner</a>
+      <a href="#run">Real run</a>
+      <a href="#how">How it works</a>
+      <a href="https://github.com/JrKrishh/tally">GitHub</a>
+    </nav>
+  </div>
+</div>
+
+<main>
+  <div class="wrap intro">
+    <p class="eyebrow">Nebius x NVIDIA Global AI Hackathon · Coding and Agentic Engineering</p>
+    <h1>Rank coding agents without paying for the whole benchmark.</h1>
+    <p class="lede">Most cells in an agent benchmark are foregone conclusions, and a benchmark's own history says which. Tally runs only the uncertain ones, caps the attempts, and hands back the ranking with a receipt. Below is its planner replaying 13,915 real frontier-model trajectories, then a real evaluation it ran on NVIDIA Nemotron 3 Nano through Nebius Token Factory.</p>
+    <div class="facts">
+      <span>Terminal-Bench 2.0 · 88 tasks</span>
+      <span>SWE-bench Pro · 54 tasks</span>
+      <span>6 frontier models of history</span>
+      <span>1 model run for real</span>
+    </div>
+  </div>
+
+  <section id="planner" aria-labelledby="planner-h">
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">Live planner</p>
+        <h2 id="planner-h">Plan an evaluation</h2>
+        <p class="lede">Each of six frontier models is treated as the new model in turn. History from the other five decides which tasks to skip; the rest run with an attempt cap, replayed from that model's real logs. Change the plan and watch what it costs and whether the ranking survives.</p>
+      </header>
+
+      <div class="controls" role="group" aria-label="Plan settings">
+        <div class="control">
+          <span class="label" id="lb-bench">Benchmark</span>
+          <div class="seg" data-key="bench" aria-labelledby="lb-bench">
+            <button type="button" data-value="terminalbench" aria-pressed="true">Terminal-Bench 2.0</button>
+            <button type="button" data-value="swebenchpro" aria-pressed="false">SWE-bench Pro</button>
+          </div>
+        </div>
+        <div class="control">
+          <span class="label" id="lb-mode">Skip</span>
+          <div class="seg" data-key="mode" aria-labelledby="lb-mode">
+            <button type="button" data-value="both" aria-pressed="true">Certain passes and fails</button>
+            <button type="button" data-value="fail" aria-pressed="false">Certain fails only</button>
+          </div>
+        </div>
+        <div class="control">
+          <label class="label" for="certainty">When history is at least</label>
+          <div class="range">
+            <input id="certainty" type="range" min="60" max="100" step="5" value="90">
+            <output id="certainty-out" for="certainty">90% sure</output>
+          </div>
+        </div>
+        <div class="control">
+          <span class="label" id="lb-att">Attempts per task</span>
+          <div class="seg" data-key="attempts" aria-labelledby="lb-att">
+            <button type="button" data-value="1" aria-pressed="false">1</button>
+            <button type="button" data-value="2" aria-pressed="false">2</button>
+            <button type="button" data-value="3" aria-pressed="true">3</button>
+            <button type="button" data-value="5" aria-pressed="false">5</button>
+            <button type="button" data-value="all" aria-pressed="false">All logged</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="planner">
+        <div class="panel" aria-live="polite">
+          <div class="hero-figure">
+            <span class="value" id="p-cost">17.7%</span>
+            <span class="caption" id="p-cost-cap">of the tokens the full evaluation spent</span>
+          </div>
+          <div class="meter" aria-hidden="true"><span id="p-meter" style="width:17.7%"></span></div>
+          <div class="meter-scale"><span id="p-tok-plan">0</span><span id="p-tok-full">full run</span></div>
+          <div style="margin-top:16px" id="p-status"></div>
+          <div class="tiles">
+            <div class="tile"><span class="k">Ranking agreement</span><span class="v" id="p-sp">0.989</span><span class="s">Spearman vs full run</span></div>
+            <div class="tile"><span class="k">Accuracy error</span><span class="v" id="p-mae">0.028</span><span class="s">mean, per model</span></div>
+            <div class="tile"><span class="k">Top model</span><span class="v" id="p-top">5 of 5</span><span class="s" id="p-top-s">samples keep it first</span></div>
+            <div class="tile"><span class="k">Tasks run</span><span class="v" id="p-run">65%</span><span class="s" id="p-run-s">of 86 shared tasks</span></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="chart-head">
+            <h3>Accuracy per model</h3>
+            <div class="legend" aria-hidden="true">
+              <span><i style="background:var(--accent-soft)"></i>Full evaluation</span>
+              <span><i style="background:var(--accent-est)"></i>Tally's estimate</span>
+            </div>
+          </div>
+          <div class="chart" id="dumbbell"></div>
+          <p class="callout" id="p-tie" hidden>Opus 4.6 and Opus 4.5 are 0.005 apart on 40 tasks, inside the one-attempt-in-eight flip rate. No plan separates them reliably, and neither does the full run.</p>
+          <details class="tablebox">
+            <summary>Show as table</summary>
+            <div class="scroll"><table id="dumbbell-table"></table></div>
+          </details>
+        </div>
+      </div>
+      <p class="note" style="margin-top:14px">Replayed on the per-attempt logs of <a href="https://arxiv.org/abs/2606.17930">arXiv 2606.17930</a> from <a href="https://github.com/evaleval/every_eval_ever">Every Eval Ever</a>: one agent scaffold, six models, fixed 10M / 30M token budgets. Sampled attempt caps are averaged over five seeds.</p>
+    </div>
+  </section>
+
+  <section id="run" aria-labelledby="run-h">
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">Run for real</p>
+        <h2 id="run-h">Then it evaluated a model nobody had</h2>
+        <p class="lede">Nemotron 3 Nano 30B is not in the study. Tally planned its Terminal-Bench 2.0 evaluation from the six frontier models' history, skipped the ten tasks every one of them failed, and ran the other 79 three times each: the model served by Nebius Token Factory, every trial in its own Docker sandbox on a Nebius AI Cloud VM.</p>
+      </header>
+
+      <div class="run-grid">
+        <div class="stack">
+          <div class="panel">
+            <div class="chart-head">
+              <h3>Terminal-Bench 2.0 accuracy</h3>
+              <div class="legend" aria-hidden="true">
+                <span><i class="sq" style="background:var(--accent)"></i>Nemotron 3 Nano, this run (95% interval)</span>
+                <span><i class="sq" style="background:var(--deemph)"></i>Frontier models, study logs</span>
+              </div>
+            </div>
+            <div class="chart" id="ranking"></div>
+            <details class="tablebox">
+              <summary>Show as table</summary>
+              <div class="scroll"><table id="ranking-table"></table></div>
+            </details>
+            <p class="note" style="margin-top:10px">Not the same budget: the frontier models ran with 10M-token trajectories and many attempts; Nemotron Nano ran with 60 turns, 2K thinking tokens and three attempts, estimated over all 89 tasks.</p>
+          </div>
+
+          <div class="panel">
+            <div class="split">
+              <div class="stat-big">
+                <div class="v" id="flaky">12 of 13</div>
+                <div class="k">tasks it ever solved, it solved only some of the time.</div>
+                <p class="note" style="margin-top:12px">A single-run leaderboard lists those as things the model can do. Three attempts show a model that sometimes does.</p>
+              </div>
+              <div>
+                <div class="chart-head">
+                  <h3>Every task it solved, attempt by attempt</h3>
+                  <div class="legend" aria-hidden="true">
+                    <span><i class="sq" style="background:var(--accent)"></i>Pass</span>
+                    <span><i class="sq" style="background:var(--cell-fail)"></i>Fail</span>
+                  </div>
+                </div>
+                <div class="chart" id="consistency"></div>
+                <p class="grid-foot" id="grid-foot"></p>
+                <details class="tablebox">
+                  <summary>Show as table</summary>
+                  <div class="scroll"><table id="consistency-table"></table></div>
+                </details>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="receipt" id="receipt" aria-label="Receipt for the Nemotron 3 Nano evaluation"></aside>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="found-h">
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">Only running it could show</p>
+        <h2 id="found-h">What the real run caught that the replay could not</h2>
+      </header>
+      <div class="found">
+        <div class="panel">
+          <h3>History's "certain pass" doesn't transfer down a tier</h3>
+          <p>Before the full run, eight tasks history called certain were run once anyway. Every near-certain fail failed; three of four near-certain passes failed too. The replay could never see this: all six models it learned from are frontier models. So for a model unlike its history, Tally now skips certain fails only.</p>
+          <div class="scroll" style="overflow-x:auto;margin-top:12px"><table id="validation-table"></table></div>
+        </div>
+        <div class="panel">
+          <h3>The API balance ran out three hours in</h3>
+          <p>117 trials came back HTTP 402. In-flight trials kept finishing for an hour afterwards, so a watchdog that waits for progress to stall never fired. It now stops on the first 402, and <code>run --retry-errored</code> re-ran exactly those cells the next morning in 2 h 45 m for $1.76, every earlier verdict untouched.</p>
+        </div>
+        <div class="panel">
+          <h3>Can a reasoning model stand in for history?</h3>
+          <p>A benchmark nobody has run has no history, so Nemotron 3 Super read each task and estimated how hard it is. It reads self-contained tasks weakly and repository tasks not at all, where issue length alone predicts better.</p>
+          <div class="scroll" style="overflow-x:auto;margin-top:12px"><table id="cold-table"></table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">How it works</p>
+        <h2 id="how-h">Three commands</h2>
+      </header>
+      <div class="steps">
+        <div class="step">
+          <span class="n">1 · plan</span>
+          <p>Reads the benchmark's history and writes which tasks to run for the new model, how many attempts, which to skip, and a few skipped ones to run once as a check.</p>
+          <pre class="cmd">python -m tally.plan --lo 0.10 --hi 1.0</pre>
+        </div>
+        <div class="step">
+          <span class="n">2 · run</span>
+          <p>Checks the key, model and disk, then has Harbor drive the Terminus-2 agent through exactly those cells, one Docker sandbox per trial, with a watchdog and resume.</p>
+          <pre class="cmd">python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4</pre>
+        </div>
+        <div class="step">
+          <span class="n">3 · report</span>
+          <p>Measured where it ran, history where it skipped: accuracy, rank among the models history knows, the token and dollar receipt, and whether the skipped cells behaved as predicted.</p>
+          <pre class="cmd">python -m tally.report --plan data/plan_terminalbench.json</pre>
+        </div>
+      </div>
+      <div class="stackline">
+        <div><b>Nebius Token Factory</b>serves Nemotron to the agent; prices the receipt</div>
+        <div><b>NVIDIA Nemotron 3</b>Nano as the agent, Super as the cold-start reader</div>
+        <div><b>Nebius AI Cloud</b>cpu-d3 VM running the Docker sandboxes</div>
+        <div><b>Harbor + Terminus-2</b>the Terminal-Bench 2.0 harness and agent</div>
+        <div><b>Every Eval Ever</b>13,915 frontier-model trajectories as history</div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="limits-h">
+    <div class="wrap two">
+      <div>
+        <p class="eyebrow">Read before quoting</p>
+        <h2 id="limits-h" style="margin:10px 0 16px">Limits</h2>
+        <ul class="limits">
+          <li>One agent scaffold. Scaffold choice moves cost up to 33× on identical tasks, so rankings should transfer; absolute numbers will not.</li>
+          <li>History is six models of one tier. The validation run shows what that costs for a weaker model.</li>
+          <li>SWE-bench Pro here is a 54-task subset with 40 tasks shared by all six models.</li>
+          <li>The frontier logs used generous 10M / 30M token budgets; the Nemotron run used far tighter ones.</li>
+        </ul>
+      </div>
+      <div>
+        <p class="eyebrow">Everything is reproducible</p>
+        <h2 style="margin:10px 0 16px">Code, data and feedback</h2>
+        <ul class="limits">
+          <li><a href="https://github.com/JrKrishh/tally">github.com/JrKrishh/tally</a>: MIT licensed; the README walks every number on this page back to the command that produced it.</li>
+          <li><a href="https://github.com/JrKrishh/tally/blob/main/FEEDBACK.md">FEEDBACK.md</a>: twelve reproducible findings on Token Factory, Nemotron, Harbor and Every Eval Ever.</li>
+          <li>This page is generated by <code>python -m tally.site</code> from the same local results.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Tally · built for the Nebius x NVIDIA Global AI Hackathon</span>
+    <span>Data: Every Eval Ever, arXiv 2606.17930, Terminal-Bench 2.0</span>
+  </div>
+</footer>
+
+<div id="tip" hidden></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

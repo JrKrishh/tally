@@ -2,6 +2,8 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
+**Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, and the Nemotron run's results and receipt.
+
 Status: **steps 1–5, first real evaluation complete.** The data is validated, the
 mechanism is measured, the cost figure is earned in simulation — **Terminal-Bench at
 17.7% of the tokens with the six-model ranking intact** — and the product has now run a
