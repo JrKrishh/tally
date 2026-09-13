@@ -1,0 +1,565 @@
+{
+ "benchmark": "terminal-bench@2.0",
+ "seed": 20260913,
+ "baseline_job": "tally-terminalbench-run-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260912-165615",
+ "rule": "tasks the stock agent ran, stratified by ever-solved, seeded shuffle, first half of each stratum to dev",
+ "dev": [
+  "adaptive-rejection-sampler",
+  "bn-fit-modify",
+  "build-cython-ext",
+  "build-pmars",
+  "build-pov-ray",
+  "chess-best-move",
+  "cobol-modernization",
+  "compile-compcert",
+  "configure-git-webserver",
+  "constraints-scheduling",
+  "count-dataset-tokens",
+  "db-wal-recovery",
+  "distribution-search",
+  "fix-git",
+  "fix-ocaml-gc",
+  "gpt2-codegolf",
+  "kv-store-grpc",
+  "largest-eigenval",
+  "model-extraction-relu-logits",
+  "modernize-scientific-stack",
+  "mteb-leaderboard",
+  "mteb-retrieve",
+  "openssl-selfsigned-cert",
+  "password-recovery",
+  "path-tracing",
+  "prove-plus-comm",
+  "pypi-server",
+  "pytorch-model-cli",
+  "pytorch-model-recovery",
+  "regex-chess",
+  "regex-log",
+  "reshard-c4-data",
+  "rstan-to-pystan",
+  "sanitize-git-repo",
+  "sparql-university",
+  "sqlite-db-truncate",
+  "torch-tensor-parallelism",
+  "train-fasttext",
+  "winning-avg-corewars",
+  "write-compressor"
+ ],
+ "heldout": [
+  "break-filter-js-from-html",
+  "caffe-cifar-10",
+  "cancel-async-tasks",
+  "circuit-fibsqrt",
+  "code-from-image",
+  "crack-7z-hash",
+  "custom-memory-heap-crash",
+  "dna-assembly",
+  "dna-insert",
+  "extract-elf",
+  "extract-moves-from-video",
+  "feal-differential-cryptanalysis",
+  "feal-linear-cryptanalysis",
+  "financial-document-processor",
+  "fix-code-vulnerability",
+  "gcode-to-text",
+  "git-leak-recovery",
+  "hf-model-inference",
+  "large-scale-text-editing",
+  "llm-inference-batching-scheduler",
+  "log-summary-date-ranges",
+  "make-mips-interpreter",
+  "mcmc-sampling-stan",
+  "merge-diff-arc-agi-task",
+  "multi-source-data-merger",
+  "nginx-request-logging",
+  "overfull-hbox",
+  "portfolio-optimization",
+  "protein-assembly",
+  "qemu-alpine-ssh",
+  "qemu-startup",
+  "query-optimize",
+  "sam-cell-seg",
+  "schemelike-metacircular-eval",
+  "sqlite-with-gcov",
+  "torch-pipeline-parallelism",
+  "tune-mjcf",
+  "video-processing",
+  "vulnerable-secret"
+ ],
+ "baseline": {
+  "adaptive-rejection-sampler": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "bn-fit-modify": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "break-filter-js-from-html": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "build-cython-ext": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "build-pmars": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "build-pov-ray": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "caffe-cifar-10": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 1,
+   "false_claims": 1
+  },
+  "cancel-async-tasks": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "chess-best-move": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "circuit-fibsqrt": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "cobol-modernization": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "code-from-image": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "compile-compcert": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "configure-git-webserver": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "constraints-scheduling": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 3,
+   "false_claims": 1
+  },
+  "count-dataset-tokens": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "crack-7z-hash": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "custom-memory-heap-crash": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "db-wal-recovery": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "distribution-search": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "dna-assembly": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "dna-insert": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "extract-elf": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "extract-moves-from-video": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "feal-differential-cryptanalysis": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "feal-linear-cryptanalysis": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "financial-document-processor": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "fix-code-vulnerability": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "fix-git": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 3,
+   "false_claims": 1
+  },
+  "fix-ocaml-gc": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "gcode-to-text": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "git-leak-recovery": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "gpt2-codegolf": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "hf-model-inference": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 3,
+   "false_claims": 1
+  },
+  "kv-store-grpc": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 3,
+   "false_claims": 1
+  },
+  "large-scale-text-editing": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "largest-eigenval": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "llm-inference-batching-scheduler": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "log-summary-date-ranges": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "make-mips-interpreter": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "mcmc-sampling-stan": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "merge-diff-arc-agi-task": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "model-extraction-relu-logits": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "modernize-scientific-stack": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "mteb-leaderboard": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "mteb-retrieve": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "multi-source-data-merger": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 3,
+   "false_claims": 1
+  },
+  "nginx-request-logging": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "openssl-selfsigned-cert": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "overfull-hbox": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "password-recovery": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "path-tracing": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "portfolio-optimization": {
+   "attempts": 3,
+   "passes": 2,
+   "claims": 2,
+   "false_claims": 0
+  },
+  "protein-assembly": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "prove-plus-comm": {
+   "attempts": 3,
+   "passes": 3,
+   "claims": 3,
+   "false_claims": 0
+  },
+  "pypi-server": {
+   "attempts": 3,
+   "passes": 1,
+   "claims": 3,
+   "false_claims": 2
+  },
+  "pytorch-model-cli": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "pytorch-model-recovery": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "qemu-alpine-ssh": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 1,
+   "false_claims": 1
+  },
+  "qemu-startup": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "query-optimize": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "regex-chess": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "regex-log": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "reshard-c4-data": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "rstan-to-pystan": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "sam-cell-seg": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "sanitize-git-repo": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "schemelike-metacircular-eval": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "sparql-university": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "sqlite-db-truncate": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "sqlite-with-gcov": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "torch-pipeline-parallelism": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "torch-tensor-parallelism": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "train-fasttext": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "tune-mjcf": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 2,
+   "false_claims": 2
+  },
+  "video-processing": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "vulnerable-secret": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "winning-avg-corewars": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  },
+  "write-compressor": {
+   "attempts": 3,
+   "passes": 0,
+   "claims": 3,
+   "false_claims": 3
+  }
+ }
+}
