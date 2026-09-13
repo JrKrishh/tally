@@ -35,6 +35,14 @@ while true; do
   if ! tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "$(date -Is) session $SESSION is gone; watchdog exiting" >> "$LOG"; exit 0
   fi
+  # Definitive: any trial that just failed with 402/401 means the balance or key is gone.
+  # In-flight trials keep completing for a while, so the streak rule below is too slow here.
+  if grep -lsE '"exception_message": "[^"]*(402|401|Payment Required|exhausted your budget)' \
+       $(find "$JOB" -mindepth 2 -maxdepth 2 -name result.json -mmin -$((INTERVAL / 60 + 1)) 2>/dev/null) 2>/dev/null | head -1 | grep -q .; then
+    echo "$(date -Is) STOPPING: a trial failed with 402/401 -- API balance exhausted or key revoked. Add funds, then: tally.run --job-name $(basename "$JOB") --retry-errored" >> "$LOG"
+    tmux kill-session -t "$SESSION"
+    exit 1
+  fi
   if [ "$done" -ge 0 ] && [ "$prev_err" -ge 0 ] && [ $((err - prev_err)) -ge 8 ] && [ "$done" -eq "$prev_done" ]; then
     echo "$(date -Is) STOPPING: $((err - prev_err)) new errors, no new completions in ${INTERVAL}s -- key, balance or daemon" >> "$LOG"
     tmux kill-session -t "$SESSION"

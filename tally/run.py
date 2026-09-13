@@ -47,6 +47,27 @@ def harbor_bin():
 MIN_FREE_GB = 30
 
 
+def drop_errored_trials(job_dir, kinds):
+    """Harbor resumes a job by skipping every trial dir that has a result -- errored ones
+    included. Delete the dirs whose exception_type is in `kinds` (e.g. APIError after a
+    402) and those trials become unfinished again. Verdicts are never touched."""
+    if not job_dir.exists():
+        sys.exit("no such job dir: %s" % job_dir)
+    n = 0
+    for d in sorted(p for p in job_dir.iterdir() if p.is_dir()):
+        f = d / "result.json"
+        if not f.exists() or f.stat().st_size == 0:
+            continue
+        try:
+            et = ((json.load(f.open(encoding="utf-8")).get("exception_info") or {}).get("exception_type"))
+        except Exception:
+            continue
+        if et and et in kinds:
+            shutil.rmtree(d)
+            n += 1
+    return n
+
+
 def preflight(args):
     """Fail in seconds, not after 237 errored trials: the key must answer, the model
     must exist, and the disk must have room for task images."""
@@ -109,10 +130,18 @@ def main():
     ap.add_argument("--job-name", help="resume an existing job dir: Harbor runs only trials with no result yet. "
                                        "Trials that already ERRORED count as done and are not retried; "
                                        "delete their dirs first, or start a fresh job")
+    ap.add_argument("--retry-errored", nargs="*", metavar="TYPE",
+                    help="with --job-name: delete trial dirs that errored with these exception types (default: APIError) so they run again")
     ap.add_argument("--dry-run", action="store_true", help="validate config and task names; no Docker, no key")
     args = ap.parse_args()
 
     plan = json.load(open(args.plan))
+    if args.retry_errored is not None:                 # flag given; an empty list means the default
+        if not args.job_name:
+            sys.exit("--retry-errored needs --job-name: the job whose errored trials should run again")
+        kinds = args.retry_errored or ["APIError"]
+        n = drop_errored_trials(Path(args.jobs_dir) / args.job_name, kinds)
+        print("## removed %d trial dir(s) that errored with %s; Harbor will run them again" % (n, "/".join(kinds)))
     if not args.dry_run:
         preflight(args)
     env = dict(os.environ)

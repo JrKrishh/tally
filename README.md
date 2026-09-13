@@ -2,11 +2,14 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-Status: **steps 1–5.** The data is validated, the mechanism is measured, the cost
-figure is earned in simulation — **Terminal-Bench at 17.7% of the tokens with the
-six-model ranking intact** — and the product now runs real evaluations: Harbor drives
-NVIDIA Nemotron on Nebius Token Factory through the cells the plan chose. The first
-real validation run found the simulation's blind spot in 22 minutes (step 5).
+Status: **steps 1–5, first real evaluation complete.** The data is validated, the
+mechanism is measured, the cost figure is earned in simulation — **Terminal-Bench at
+17.7% of the tokens with the six-model ranking intact** — and the product has now run a
+real evaluation end to end: Harbor drove NVIDIA Nemotron 3 Nano on Nebius Token Factory
+through the cells the plan chose, on a Nebius AI Cloud VM. **Nemotron Nano scores an
+estimated 0.090 on Terminal-Bench 2.0, seventh of seven** — every planned task measured
+at least once, 120 verdicts, a data point nobody had. Second and third attempts are
+pending an API balance that ran out three hours in (step 5).
 
 ## The problem
 
@@ -255,6 +258,37 @@ That is the whole reason the validate phase exists, and it changes the product: 
 model of unknown tier, **skip only on the fail side** (`plan --hi 1.0`). The pass side
 runs until the model has earned its own history. Ten tasks skipped instead of thirty-one;
 the saving is smaller and the estimate is honest.
+
+### The full run
+
+The fail-side plan — 78 tasks × 3 attempts plus `query-optimize` — ran on a Nebius AI
+Cloud VM (`cpu-d3`, 8 vCPU, 200 GB) with four sandboxes in parallel, Nemotron Nano served
+by Token Factory. Four hours wall-clock.
+
+| | |
+|---|---|
+| trials | 237 launched: 115 clean, 5 agent timeouts (20 min), **117 failed with HTTP 402** |
+| coverage | **every one of the 79 planned tasks has at least one verdict** (38 with one, 41 with two) |
+| verdicts | 120 — **13 passes across 11 tasks** |
+| tokens | 24.3M in, 2.9M out, **18.6M of the input served from cache** |
+| skipped-cell check | 4 of 4 near-certain fails failed |
+
+**Nemotron 3 Nano 30B on Terminal-Bench 2.0, estimated over all 89 tasks: 0.090 — seventh
+of seven**, well below Opus 4's 0.407. That is the first number in this project that came
+from running an evaluation rather than replaying one, and it is a data point nobody has
+deposited: none of the six frontier models' logs say anything about a 30B model.
+
+The 402s are the Token Factory balance running out three hours in — the one input I
+could not verify from outside the console, and the one that failed. They cost nothing
+but the second and third attempts, which is why coverage is complete and depth is not.
+Two flips already visible in the depth we have: `git-leak-recovery` and `kv-store-grpc`
+failed in the validation run and passed here — the 12% per-attempt variance from step 1,
+live on a different model.
+
+What it changed: the watchdog now stops the run on the first 402 instead of waiting for
+completions to stall (in-flight trials kept finishing for an hour after the balance
+died), and `run --job-name … --retry-errored` re-runs exactly the cells that failed on
+payment, leaving every verdict untouched.
 
 ## Reproduce
 

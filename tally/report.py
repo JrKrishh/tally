@@ -182,11 +182,12 @@ def main():
         for t, atts in list(run.items())[:3]:
             print("   %s: %d attempt(s), errored=%s" % (t, len(atts), [e for _, _, e in atts]))
         return
-    n_planned = len(plan["tasks_run"]) + len(plan.get("tasks_no_history", []))
-    print("  measured pass rate on run tasks: %.3f   (%d of %d planned cells measured so far)"
-          % (float(np.mean(list(measured.values()))), covered, n_planned))
+    planned = set(plan["tasks_run"]) | set(plan.get("tasks_no_history", []))
+    run_measured = [t for t in measured if t in planned]
+    print("  measured pass rate on run tasks: %.3f   (%d of %d planned cells have a verdict)"
+          % (float(np.mean([measured[t] for t in run_measured])) if run_measured else float("nan"), len(run_measured), len(planned)))
     print("  estimated accuracy on all %d tasks (measured where run, history where skipped): %.3f%s"
-          % (len(all_tasks), est, "   <- mostly prior until more cells run" if covered < n_planned // 2 else ""))
+          % (len(all_tasks), est, "   <- mostly prior until more cells run" if len(run_measured) < len(planned) // 2 else ""))
     # Harbor tallies tokens and cost at the job level; prefer that over hunting in agent results.
     job_tokens = (rstats.get("n_input_tokens") or 0) + (rstats.get("n_output_tokens") or 0)
     if job_tokens:

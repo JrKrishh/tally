@@ -31,6 +31,15 @@ workloads, public commentary claims Nebius has no caching, and the pricing page 
 404 from outside the console — so nobody knows whether cached tokens are discounted.
 Suggestion: document it, price it, and put it on the model card.
 
+**5a. There is no way to read the balance from the API, and no low-balance warning.**
+A four-hour unattended evaluation hit `402 Payment Required — You have exhausted your
+budget` three hours in. Nothing before that moment — no header, no usage endpoint, no
+email — said the balance was low. 117 trials failed on payment; because the run was
+concurrent, in-flight trials kept completing for an hour after the balance died, so a
+watchdog keyed on "nothing completes any more" never fired. Suggestion: a balance/usage
+endpoint (even a `X-Balance-Remaining` header on responses), and an alert threshold in
+the console. Cost: a night's second and third attempts across 79 tasks.
+
 **5. The pricing and model docs are not reachable without a login.** `docs.tokenfactory.nebius.com/pricing`,
 `nebius.com/prices-ai-studio` and the catalog page all 404 or render empty outside the
 console. Cost estimates for this project had to be done from OpenRouter's numbers.
