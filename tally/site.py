@@ -97,19 +97,11 @@ def trial_rows(job_dir):
     return rows
 
 
-def real_run(tb_full):
-    job_dir = ROOT / "jobs" / JOB
-    rows = trial_rows(job_dir)
-    by = collections.defaultdict(list)
-    for r in rows:
-        by[r["task"]].append(r)
-    for t in by:
-        by[t].sort(key=lambda r: r["started"])
-    plan = json.load(open(DATA.parent / "plan_terminalbench.json"))
-    skipped = plan["skipped_prior"]
-    score = dict((t, float(np.mean([1.0 if a["outcome"] == "pass" else 0.0 for a in v]))) for t, v in by.items())
-    tasks = sorted(set(score) | set(skipped))
-    est = float(np.mean([score.get(t, skipped.get(t, 0.0)) for t in tasks]))
+def estimate(by, skipped, tasks):
+    """Mean accuracy over tasks (measured where run, history where skipped) and a 95% interval
+    from bootstrapping tasks and, within each measured task, its attempts."""
+    score = lambda t: float(np.mean([1.0 if a["outcome"] == "pass" else 0.0 for a in by[t]])) if t in by else skipped[t]
+    point = float(np.mean([score(t) for t in tasks]))
     rng, boots = random.Random(0), []
     for _ in range(4000):
         s = []
@@ -121,6 +113,24 @@ def real_run(tb_full):
                 s.append(skipped[t])
         boots.append(sum(s) / len(s))
     boots.sort()
+    return point, [round(boots[100], 3), round(boots[3899], 3)]
+
+
+def real_run():
+    job_dir = ROOT / "jobs" / JOB
+    rows = trial_rows(job_dir)
+    by = collections.defaultdict(list)
+    for r in rows:
+        by[r["task"]].append(r)
+    for t in by:
+        by[t].sort(key=lambda r: r["started"])
+    plan = json.load(open(DATA.parent / "plan_terminalbench.json"))
+    skipped = plan["skipped_prior"]
+    tasks = sorted(set(by) | set(skipped))
+    est, ci = estimate(by, skipped, tasks)
+    ref, ref_tasks, excluded = select.nofeedback_reference("terminalbench")
+    ref_tasks = [t for t in ref_tasks if t in by or t in skipped]
+    cmp_est, cmp_ci = estimate(by, skipped, ref_tasks)
     solved = sorted((t for t, v in by.items() if any(a["outcome"] == "pass" for a in v)),
                     key=lambda t: (-sum(a["outcome"] == "pass" for a in by[t]), t))
     stats = json.load(open(job_dir / "result.json")).get("stats", {})
@@ -139,13 +149,17 @@ def real_run(tb_full):
     always_fail = sum(1 for v in by.values() if all(a["outcome"] != "pass" for a in v))
     return {
         "model": "Nemotron 3 Nano 30B", "model_id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
-        "estimate": round(est, 3), "ci": [round(boots[100], 3), round(boots[3899], 3)],
+        "estimate": round(est, 3), "ci": ci,
         "tasks_all": len(tasks), "trials": len(rows), "passes": sum(r["outcome"] == "pass" for r in rows),
         "timeouts": sum(r["outcome"] == "timeout" for r in rows),
         "tasks_run": len(by), "always_fail": always_fail,
         "always_pass": [t for t in solved if all(a["outcome"] == "pass" for a in by[t])],
         "solved": [{"task": t, "attempts": [dict((k, a[k]) for k in ("id", "outcome", "steps", "minutes", "tokens")) for a in by[t]]} for t in solved],
-        "frontier": tb_full,
+        "compare": {
+            "tasks": len(ref_tasks), "nano": round(cmp_est, 3), "ci": cmp_ci,
+            "frontier": dict((NAMES[m], round(v, 3)) for m, v in ref.items()),
+            "excluded": dict((NAMES[m], n) for m, n in excluded.items()),
+        },
         "receipt": {
             "tokens_in": tin, "tokens_out": tout, "tokens_cached": tcache,
             "price_in_per_m": PRICE_IN * 1e6, "price_out_per_m": PRICE_OUT * 1e6,
@@ -197,7 +211,7 @@ def main():
     tb, swe = planner("terminalbench"), planner("swebenchpro")
     data = {
         "planner": {"terminalbench": tb, "swebenchpro": swe, "thresholds": THRESHOLDS, "attempts": [a or "all" for a in ATTEMPTS]},
-        "run": real_run(tb["full"]),
+        "run": real_run(),
         "validation": validation(),
         "coldstart": cold_start(),
     }
@@ -208,6 +222,9 @@ def main():
     print("  run: estimate %.3f [%.3f, %.3f], %d trials, %d passes, solved tasks %d, receipt $%.2f + VM $%.2f (%.1f h: %s)"
           % (r["estimate"], r["ci"][0], r["ci"][1], r["trials"], r["passes"], len(r["solved"]),
              r["receipt"]["inference_usd"], r["receipt"]["vm_usd"], r["receipt"]["vm_hours"], r["receipt"]["sittings"]))
+    c = r["compare"]
+    print("  like for like, %d tasks, no feedback: %s | Nano %.3f %s | excluded %s"
+          % (c["tasks"], c["frontier"], c["nano"], c["ci"], c["excluded"]))
     print("  validation:", [(v["task"], v["predicted"], v["actual"]) for v in data["validation"]])
     print("  coldstart:", data["coldstart"])
     print("  headline cell both|0.10|3:", tb["grid"]["both|0.10|3"])

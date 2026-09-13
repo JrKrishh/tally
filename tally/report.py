@@ -226,13 +226,24 @@ def main():
     else:
         print("  tokens: none recorded yet (job stats empty and no token counters in agent results)")
 
-    # rank against the models history knows
-    by, models, common = select.cells(select.load_attempts(plan["benchmark"]))
-    acc, _ = select.full(by, models, common)
-    table = sorted([(a, m) for m, a in acc.items()] + [(est, args.model + "  <- new, estimated")], reverse=True)
-    print("\n  ranking (history models on their %d shared tasks; new model estimated):" % len(common))
+    # rank like for like: history's attempts without correctness feedback, on the same tasks
+    acc, ref_tasks, excluded = select.nofeedback_reference(plan["benchmark"])
+    new_parts = []
+    for t in ref_tasks:
+        if t in measured:
+            new_parts.append(measured[t])
+        elif t in prior:
+            new_parts.append(prior[t])
+        elif t in run_prior:
+            new_parts.append(run_prior[t])
+    est_ref = float(np.mean(new_parts)) if new_parts else float("nan")
+    table = sorted([(a, m) for m, a in acc.items()] + [(est_ref, args.model + "  <- new, estimated")], reverse=True)
+    print("\n  ranking on the %d tasks shared by history models' runs without correctness feedback:" % len(ref_tasks))
     for i, (a, m) in enumerate(table, 1):
         print("   %d. %-50s %.3f" % (i, m, a))
+    if excluded:
+        print("   not ranked, too few runs without feedback: %s"
+              % ", ".join("%s (%d tasks)" % (m, n) for m, n in sorted(excluded.items())))
 
     # the honest part: did the skipped cells behave as history predicted?
     if val:

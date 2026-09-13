@@ -9,7 +9,8 @@ mechanism is measured, the cost figure is earned in simulation — **Terminal-Be
 17.7% of the tokens with the six-model ranking intact** — and the product has now run a
 real evaluation end to end: Harbor drove NVIDIA Nemotron 3 Nano on Nebius Token Factory
 through the cells the plan chose, on a Nebius AI Cloud VM. **Nemotron 3 Nano scores an
-estimated 0.079 on Terminal-Bench 2.0 (95% interval 0.035–0.131), seventh of seven** —
+estimated 0.079 on Terminal-Bench 2.0 (95% interval 0.035–0.131), last of five against
+the frontier models' runs without correctness feedback on the same tasks** —
 every planned task attempted three times, 237 verdicts, $3.92 of inference, and a data
 point nobody had. Of the 13 tasks it ever solved, it solved 12 only some of the time
 (step 5).
@@ -274,15 +275,35 @@ by Token Factory. Four hours wall-clock.
 | verdicts | 229 clean, 8 agent timeouts (20 min, scored as fails) |
 | passes | **21 across 13 tasks** |
 | tokens | 42.8M in, 5.6M out, **32.4M of the input served from cache** |
-| cost | **$3.92 at Token Factory list price** ($0.06/M in, $0.24/M out; no cache discount assumed) plus ~$3 of VM time |
+| cost | **$3.92 at Token Factory list price** ($0.06/M in, $0.24/M out; no cache discount assumed) plus $1.35 of VM time for the 5.9 h of trials |
 | skipped-cell check | 4 of 4 near-certain fails failed |
 
 **Nemotron 3 Nano 30B on Terminal-Bench 2.0, estimated over all 89 tasks: 0.079, with a
 95% interval of 0.035–0.131** (bootstrap over tasks and over attempts within each task).
-Seventh of seven: the weakest frontier model in the study, Opus 4, sits at 0.407, far
-outside that interval. It is the first number in this project that came from running an
-evaluation rather than replaying one, and a data point nobody has deposited — none of
-the six frontier models' logs say anything about a 30B model.
+It is the first number in this project that came from running an evaluation rather than
+replaying one, and a data point nobody has deposited — none of the six frontier models'
+logs say anything about a 30B model.
+
+**Ranking it against the frontier needs one correction.** Half of the study's attempts
+ran with oracle correctness feedback — the agent was told whether its answer was right —
+and that roughly doubles the weaker models (Opus 4 goes from 0.233 to 0.473 with it).
+Nemotron Nano never had that signal, so an earlier version of this README ranked it
+against inflated numbers. Like for like, using only attempts without feedback, on the 57
+tasks every included model shares:
+
+| model | accuracy, same 57 tasks, no feedback |
+|---|---|
+| GPT-5.4 | 0.596 |
+| GPT-5.2 | 0.496 |
+| Opus 4.6 | 0.487 |
+| Opus 4 | 0.187 |
+| **Nemotron 3 Nano 30B** (this run) | **0.042** (95% interval 0.006–0.089) |
+
+Last of five, and Opus 4 is still well outside its interval. Opus 4.5 and GPT-5 are left
+out: they have only 2 and 11 tasks without feedback. Budgets still differ — 10M-token
+trajectories for the frontier models, 60 turns and 2K thinking tokens for Nemotron Nano —
+so this is a floor for the small model, not a verdict on it. `tally.report` and the demo
+page both compute the comparison this way.
 
 **The consistency finding is sharper than the score.** Of the 79 tasks, 66 failed all
 three attempts and exactly one — `prove-plus-comm` — passed all three. The other **12

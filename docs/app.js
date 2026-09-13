@@ -176,11 +176,18 @@
 
   // ------------------------------------------------------------------ real run: ranking
   function renderRanking() {
-    var R = D.run, box = document.getElementById("ranking");
+    var R = D.run, C = R.compare, box = document.getElementById("ranking");
     clear(box);
+    var ex = Object.keys(C.excluded).map(function (n) { return n + " (" + C.excluded[n] + " tasks)"; });
+    document.getElementById("compare-note").textContent =
+      "Every model is scored on the same " + C.tasks + " tasks, using only frontier attempts where the agent was not told whether it was right; " +
+      "half the study's attempts had that oracle feedback, which roughly doubles the weaker models. " +
+      (ex.length ? ex.join(" and ") + " have too few runs without feedback to include. " : "") +
+      "Budgets still differ: the frontier models ran with 10M-token trajectories, Nemotron Nano with 60 turns and 2K thinking tokens. " +
+      "Across all " + R.tasks_all + " tasks Nano estimates " + f3(R.estimate) + ".";
     var W = Math.max(300, box.clientWidth || 600);
-    var rows = Object.keys(R.frontier).map(function (n) { return { name: n, v: R.frontier[n], ours: false }; });
-    rows.push({ name: R.model, v: R.estimate, ours: true, ci: R.ci });
+    var rows = Object.keys(C.frontier).map(function (n) { return { name: n, v: C.frontier[n], ours: false }; });
+    rows.push({ name: R.model, v: C.nano, ours: true, ci: C.ci });
     rows.sort(function (a, b) { return b.v - a.v; });
     var left = W < 460 ? 118 : 150, right = W < 460 ? 36 : 56, top = 8, rowH = 32, bar = 16, bottom = 26;
     var H = top + rows.length * rowH + bottom;
@@ -212,8 +219,8 @@
       svg("text", { x: labelX, y: cy + 4, "font-size": 12, fill: r.ours ? "var(--ink)" : "var(--ink-2)", style: "font-variant-numeric: tabular-nums" }, g).textContent = label;
       var hit = svg("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent" }, g);
       bindTip(hit, r.ours
-        ? [{ text: f3(r.v) + " estimated" }, { text: r.name + " · this run" }, { text: "95% interval " + f3(r.ci[0]) + "–" + f3(r.ci[1]), muted: true }, { text: R.trials + " trials, 3 attempts per task", muted: true }]
-        : [{ text: f3(r.v) }, { text: r.name + " · study logs" }, { text: "mean over " + D.planner.terminalbench.tasks + " shared tasks", muted: true }],
+        ? [{ text: f3(r.v) + " estimated" }, { text: r.name + " · this run, no feedback" }, { text: "95% interval " + f3(r.ci[0]) + "–" + f3(r.ci[1]) + " on the same " + C.tasks + " tasks", muted: true }, { text: f3(R.estimate) + " across all " + R.tasks_all + " tasks", muted: true }]
+        : [{ text: f3(r.v) }, { text: r.name + " · study logs, no feedback" }, { text: "mean over the same " + C.tasks + " tasks", muted: true }],
         r.name + ": " + f3(r.v));
     });
 
@@ -226,7 +233,7 @@
       var tr = html("tr", {}, tb);
       html("td", {}, tr, r.name);
       html("td", { class: "num" }, tr, r.ours ? f3(r.v) + " (" + f3(r.ci[0]) + "–" + f3(r.ci[1]) + ")" : f3(r.v));
-      html("td", {}, tr, r.ours ? "this run, 3 attempts per task" : "study logs");
+      html("td", {}, tr, r.ours ? "this run, 3 attempts per task, no feedback" : "study logs, attempts without feedback");
     });
   }
 
@@ -304,7 +311,7 @@
     html("hr", {}, box);
     row("Estimated accuracy", f3(R.estimate));
     row("95% interval", f3(R.ci[0]) + "–" + f3(R.ci[1]), "sub");
-    row("Rank", (Object.keys(R.frontier).filter(function (n) { return R.frontier[n] > R.estimate; }).length + 1) + " of " + (Object.keys(R.frontier).length + 1));
+    row("Rank, like for like", (Object.keys(R.compare.frontier).filter(function (n) { return R.compare.frontier[n] > R.compare.nano; }).length + 1) + " of " + (Object.keys(R.compare.frontier).length + 1));
     html("div", { class: "r-foot" }, box,
       "Nebius Token Factory · Nebius AI Cloud cpu-d3 · trials " + rc.sittings.map(function (p) { return p[0] + "–" + p[1]; }).join(", ") + " UTC. VM hours count running trials only.");
   }

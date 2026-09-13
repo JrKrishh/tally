@@ -369,10 +369,10 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
         <div class="stack">
           <div class="panel">
             <div class="chart-head">
-              <h3>Terminal-Bench 2.0 accuracy</h3>
+              <h3>Terminal-Bench 2.0 accuracy, like for like</h3>
               <div class="legend" aria-hidden="true">
                 <span><i class="sq" style="background:var(--accent)"></i>Nemotron 3 Nano, this run (95% interval)</span>
-                <span><i class="sq" style="background:var(--deemph)"></i>Frontier models, study logs</span>
+                <span><i class="sq" style="background:var(--deemph)"></i>Frontier models, runs without feedback</span>
               </div>
             </div>
             <div class="chart" id="ranking"></div>
@@ -380,7 +380,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
               <summary>Show as table</summary>
               <div class="scroll"><table id="ranking-table"></table></div>
             </details>
-            <p class="note" style="margin-top:10px">Not the same budget: the frontier models ran with 10M-token trajectories and many attempts; Nemotron Nano ran with 60 turns, 2K thinking tokens and three attempts, estimated over all 89 tasks.</p>
+            <p class="note" style="margin-top:10px" id="compare-note">Every model is scored on the same tasks, using only frontier attempts where the agent was not told whether it was right; half the study's attempts had that oracle feedback, which roughly doubles the weaker models. Budgets still differ: the frontier models ran with 10M-token trajectories, Nemotron Nano with 60 turns and 2K thinking tokens.</p>
           </div>
 
           <div class="panel">

@@ -58,6 +58,26 @@ def cells(rows):
     return by, models, common
 
 
+def nofeedback_reference(col, min_tasks=20):
+    """History to rank a new model against: each model's accuracy from attempts WITHOUT
+    correctness feedback (the study's S-adaptive arm), on the tasks shared by every model
+    with at least min_tasks such tasks. The other arm told the agent whether its answer was
+    right, which roughly doubles the weaker models - a signal a new model never gets.
+    -> (acc by model, common task list, {excluded model: no-feedback task count})."""
+    per = collections.defaultdict(lambda: collections.defaultdict(list))
+    for r in load_attempts(col):
+        if r["strategy"] != "S-adaptive":
+            continue
+        s = float(r["score"]) if r["score"] not in ("", "None") else None
+        per[r["model"]][r["task"]].append(1.0 if passed(s) else 0.0)
+    counts = dict((m, len(v)) for m, v in per.items())
+    included = [m for m in per if counts[m] >= min_tasks]
+    common = sorted(set.intersection(*(set(per[m]) for m in included))) if included else []
+    acc = dict((m, float(np.mean([np.mean(per[m][t]) for t in common]))) for m in included)
+    excluded = dict((m, n) for m, n in counts.items() if m not in included)
+    return acc, common, excluded
+
+
 def full(by, models, common):
     acc = dict((m, float(np.mean([np.mean([p for p, _ in by[(m, t)]]) for t in common]))) for m in models)
     cost = dict((m, sum(tok for t in common for _, tok in by[(m, t)])) for m in models)
