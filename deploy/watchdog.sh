@@ -37,7 +37,9 @@ while true; do
   fi
   # Definitive: any trial that just failed with 402/401 means the balance or key is gone.
   # In-flight trials keep completing for a while, so the streak rule below is too slow here.
-  if grep -lsE '"exception_message": "[^"]*(402|401|Payment Required|exhausted your budget)' \
+  # /dev/null keeps grep off stdin when no result changed recently -- inside tmux that
+  # stdin is a terminal and grep would block forever, silently killing the watchdog.
+  if grep -lsE '"exception_message": "[^"]*(402|401|Payment Required|exhausted your budget)' /dev/null \
        $(find "$JOB" -mindepth 2 -maxdepth 2 -name result.json -mmin -$((INTERVAL / 60 + 1)) 2>/dev/null) 2>/dev/null | head -1 | grep -q .; then
     echo "$(date -Is) STOPPING: a trial failed with 402/401 -- API balance exhausted or key revoked. Add funds, then: tally.run --job-name $(basename "$JOB") --retry-errored" >> "$LOG"
     tmux kill-session -t "$SESSION"
