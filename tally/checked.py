@@ -65,10 +65,8 @@ Working directory listing:
 Write the checks a strict grader would run:
 - One check per observable requirement: an output file and its exact format, a value it must contain, a program that must run, a command whose output must match, a service that must answer.
 - Test substance, not just existence. If the task provides example code, an example input and output, a test or evaluation script, or a tool to measure with, run it and check the result against the task's stated criteria.
-- Test it the way the task says it will be used: if the task says the result will be installed, imported, called, served or run in a certain way, do exactly that.
-- At least one check must fail for a solution that only looks right: one that hard-codes an answer, ignores its input, or prints the right format with the wrong content. For example, give it a second input you construct yourself and verify the result independently.
 - Each check is a bash script that prints what it found, then prints PASS or FAIL as its last line, and exits 1 on FAIL.
-- Checks must not change anything: write only under /tmp, install nothing, delete nothing, stop no processes. If running the solution would modify files the task gave, copy them to /tmp first and run it there.
+- Checks must not change anything: write only under /tmp, install nothing, delete nothing, stop no processes.
 - Each check must finish within {timeout} seconds.
 - At most {max_checks} checks, most important first.
 
@@ -95,7 +93,7 @@ class CheckedTerminus(Terminus2):
     options: CheckedOptions
 
     def version(self) -> str | None:
-        return "2.0.0-checked.2"          # .2: no outline recovery, stricter checks (dev findings)
+        return "2.0.0-checked.3"          # .3: no outline recovery; the original writer prompt, which graded best
 
     async def run(self, instruction, environment, context) -> None:
         self._instruction, self._env = instruction, environment

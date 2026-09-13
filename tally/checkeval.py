@@ -26,25 +26,26 @@ from harbor.llms.lite_llm import LiteLLM
 
 from tally.checked import WRITER, run_check, write_checks
 
-# The prompt the dev check ran with (commit dc7f5c9): today's minus the three lines added after it.
-_ADDED = [
+# The stricter prompt tried after the dev check: the layer's prompt plus three demands. It graded worse
+# for every writer (accepts correct solutions less often), so the layer kept the original.
+_STRICT_LINES = (
     "- Test it the way the task says it will be used: if the task says the result will be installed, "
-    "imported, called, served or run in a certain way, do exactly that.\n",
+    "imported, called, served or run in a certain way, do exactly that.\n"
     "- At least one check must fail for a solution that only looks right: one that hard-codes an answer, "
     "ignores its input, or prints the right format with the wrong content. For example, give it a second "
-    "input you construct yourself and verify the result independently.\n",
-    " If running the solution would modify files the task gave, copy them to /tmp first and run it there.",
-]
-WRITER_V1 = WRITER
-for _line in _ADDED:
-    assert _line in WRITER_V1, _line
-    WRITER_V1 = WRITER_V1.replace(_line, "")
+    "input you construct yourself and verify the result independently.\n"
+)
+_STRICT_COPY = " If running the solution would modify files the task gave, copy them to /tmp first and run it there."
+_i = WRITER.index("\n", WRITER.index("- Test substance, not just existence.")) + 1
+WRITER_STRICT = WRITER[:_i] + _STRICT_LINES + WRITER[_i:]
+_j = WRITER_STRICT.index("stop no processes.") + len("stop no processes.")
+WRITER_STRICT = WRITER_STRICT[:_j] + _STRICT_COPY + WRITER_STRICT[_j:]
 
 WRITERS = {
-    "nano-v1": ("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", WRITER_V1),
-    "nano": ("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", WRITER),
-    "super": ("nvidia/nemotron-3-super-120b-a12b", WRITER),
-    "ultra": ("nvidia/Nemotron-3-Ultra-550b-a55b", WRITER),
+    "nano-v1": ("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", WRITER),
+    "nano": ("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", WRITER_STRICT),
+    "super": ("nvidia/nemotron-3-super-120b-a12b", WRITER_STRICT),
+    "ultra": ("nvidia/Nemotron-3-Ultra-550b-a55b", WRITER_STRICT),
 }
 
 
