@@ -271,6 +271,7 @@ by Token Factory. Four hours wall-clock.
 | coverage | **every one of the 79 planned tasks has at least one verdict** (38 with one, 41 with two) |
 | verdicts | 120 — **13 passes across 11 tasks** |
 | tokens | 24.3M in, 2.9M out, **18.6M of the input served from cache** |
+| cost | **$2.16 at Token Factory list price** ($0.06/M in, $0.24/M out; no cache discount assumed) — plus ~$1 of VM time |
 | skipped-cell check | 4 of 4 near-certain fails failed |
 
 **Nemotron 3 Nano 30B on Terminal-Bench 2.0, estimated over all 89 tasks: 0.090 — seventh

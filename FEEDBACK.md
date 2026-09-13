@@ -40,9 +40,14 @@ watchdog keyed on "nothing completes any more" never fired. Suggestion: a balanc
 endpoint (even a `X-Balance-Remaining` header on responses), and an alert threshold in
 the console. Cost: a night's second and third attempts across 79 tasks.
 
-**5. The pricing and model docs are not reachable without a login.** `docs.tokenfactory.nebius.com/pricing`,
+**5. Prices are in the API but nowhere in the docs.** `docs.tokenfactory.nebius.com/pricing`,
 `nebius.com/prices-ai-studio` and the catalog page all 404 or render empty outside the
-console. Cost estimates for this project had to be done from OpenRouter's numbers.
+console, and plain `GET /v1/models` carries no prices. `GET /v1/models?verbose=true` does —
+`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` at $0.06/M prompt, $0.24/M completion — but I only
+found it by guessing the parameter, and there is still no cached-token price in it.
+LiteLLM has no price map for Token Factory ids either, so Harbor reports `cost_usd: null`
+on every run. Suggestion: document `verbose=true`, add a `cached_prompt` price, and
+contribute the price map to LiteLLM.
 
 ## NVIDIA Nemotron
 

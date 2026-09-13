@@ -43,6 +43,22 @@ def find_tokens(obj, depth=0):
     return total
 
 
+def model_price(model):
+    """(usd per prompt token, usd per completion token) from Token Factory's models list, or None.
+    The list only carries prices with ?verbose=true; no cached-token price is published."""
+    try:
+        import requests
+        from . import nebius
+        r = requests.get(nebius.API + "/models?verbose=true",
+                         headers={"Authorization": "Bearer " + nebius.key()}, timeout=30)
+        for m in r.json().get("data", []):
+            if m.get("id") == model and m.get("pricing"):
+                return float(m["pricing"]["prompt"]), float(m["pricing"]["completion"])
+    except (Exception, SystemExit):
+        return None
+    return None
+
+
 def find_jobs(jobs_dir, prefix, include_dry=False):
     """Job dirs matching a prefix, oldest first. Names are timestamped by tally.run."""
     dirs = [p for p in Path(jobs_dir).glob(prefix + "*") if p.is_dir()]
@@ -200,6 +216,11 @@ def main():
         print("  per attempt: %.0fK tokens   -> the full plan (%d attempts) at this rate: ~%.0fM tokens"
               % (per / 1e3, full_attempts, per * full_attempts / 1e6))
         print("  plan expected ~%.0fM at frontier-model trajectory lengths" % (plan["expected_tokens"]["plan"] / 1e6))
+        price = model_price(args.model)
+        if price and rstats.get("n_input_tokens") is not None:
+            usd = rstats["n_input_tokens"] * price[0] + (rstats.get("n_output_tokens") or 0) * price[1]
+            print("  cost at list price: $%.2f   ($%.2f/M in, $%.2f/M out; no cached-token price is published, so cache is billed as input here)"
+                  % (usd, price[0] * 1e6, price[1] * 1e6))
     else:
         print("  tokens: none recorded yet (job stats empty and no token counters in agent results)")
 
