@@ -301,9 +301,12 @@ tasks every included model shares:
 
 Last of five, and Opus 4 is still well outside its interval. Opus 4.5 and GPT-5 are left
 out: they have only 2 and 11 tasks without feedback. Budgets still differ — 10M-token
-trajectories for the frontier models, 60 turns and 2K thinking tokens for Nemotron Nano —
-so this is a floor for the small model, not a verdict on it. `tally.report` and the demo
-page both compute the comparison this way.
+trajectories for the frontier models, 60 turns for Nemotron Nano — and the stock agent
+threw away 18% of Nano's turns (691 of 3,908): the complete answer came back in
+`reasoning_content` with `content` empty, and Terminus-2 reads only `content`. So this is
+a floor for the small model, not a verdict on it. (The 2K thinking cap passed with
+`--max-thinking` never applied either: Harbor sends it only to Anthropic models.)
+`tally.report` and the demo page both compute the comparison this way.
 
 **The consistency finding is sharper than the score.** Of the 79 tasks, 66 failed all
 three attempts and exactly one — `prove-plus-comm` — passed all three. The other **12

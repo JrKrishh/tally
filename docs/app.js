@@ -183,7 +183,7 @@
       "Every model is scored on the same " + C.tasks + " tasks, using only frontier attempts where the agent was not told whether it was right; " +
       "half the study's attempts had that oracle feedback, which roughly doubles the weaker models. " +
       (ex.length ? ex.join(" and ") + " have too few runs without feedback to include. " : "") +
-      "Budgets still differ: the frontier models ran with 10M-token trajectories, Nemotron Nano with 60 turns and 2K thinking tokens. " +
+      "Budgets still differ: the frontier models ran with 10M-token trajectories, Nemotron Nano with 60 turns, and the stock agent discarded 18% of Nano's turns because the answer came back in the reasoning field. " +
       "Across all " + R.tasks_all + " tasks Nano estimates " + f3(R.estimate) + ".";
     var W = Math.max(300, box.clientWidth || 600);
     var rows = Object.keys(C.frontier).map(function (n) { return { name: n, v: C.frontier[n], ours: false }; });
