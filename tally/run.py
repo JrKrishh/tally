@@ -126,6 +126,8 @@ def build(plan, phase, args):
         cmd += ["--ak", kv]
     if args.build_timeout_multiplier:
         cmd += ["--environment-build-timeout-multiplier", str(args.build_timeout_multiplier)]
+    if args.agent_timeout_multiplier:
+        cmd += ["--agent-timeout-multiplier", str(args.agent_timeout_multiplier)]
     for t in tasks:
         cmd += ["-i", t]
     if args.dry_run:
@@ -146,6 +148,9 @@ def main():
     ap.add_argument("--tasks", nargs="+", metavar="TASK", help="only these of the phase's tasks")
     ap.add_argument("-n", "--concurrent", type=int, default=2)
     ap.add_argument("--max-turns", type=int, default=60)
+    ap.add_argument("--agent-timeout-multiplier", type=float,
+                    help="more time for the agent; only for runs that grade something other than an agent, "
+                         "like tally.checkeval, since it changes what an agent can do")
     ap.add_argument("--build-timeout-multiplier", type=float,
                     help="more time to pull and start a task image (Harbor's default is 600 s for most tasks); "
                          "multi-GB images miss it on a slow link. Does not change the agent's time")

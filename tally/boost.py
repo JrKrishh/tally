@@ -169,15 +169,90 @@ def compare(args):
                  turns(rows), usd(rows), sum(r["timeout"] for r in rows), len(rows)))
 
 
+PRICES = {  # $/M prompt, completion -- GET /v1/models?verbose=true, 2026-09-13
+    "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B": (0.06, 0.24),
+    "nvidia/nemotron-3-super-120b-a12b": (0.30, 0.90),
+    "nvidia/Nemotron-3-Ultra-550b-a55b": (1.00, 3.00),
+}
+
+
+def checkeval(args):
+    """Grade each writer on tasks whose reference solution passes the hidden tests: would its checks
+    accept that correct solution, and reject the untouched starting state?"""
+    graded, skipped, per = [], [], {}
+    for d in sorted(p for p in Path(args.job).iterdir() if p.is_dir() and "__" in p.name):
+        f = d / "result.json"
+        if not f.exists() or f.stat().st_size == 0:
+            continue
+        r = json.load(f.open(encoding="utf-8"))
+        task = d.name.split("__")[0]
+        reward = ((r.get("verifier_result") or {}).get("rewards") or {}).get("reward")
+        ce = ((r.get("agent_result") or {}).get("metadata") or {}).get("checkeval")
+        if reward is None or reward < 1 or not ce:
+            skipped.append("%s (%s)" % (task, "reference solution failed" if reward is not None else
+                                        (r.get("exception_info") or {}).get("exception_type") or "no verdict"))
+            continue
+        graded.append(task)
+        for name, rec in ce["writers"].items():
+            w = per.setdefault(name, {"tasks": [], "cost": 0.0, "model": rec["writer"].get("model")})
+            tok = rec["writer"].get("tokens") or [0, 0]
+            pi, po = PRICES.get(w["model"], (0, 0))
+            w["cost"] += (tok[0] * pi + tok[1] * po) / 1e6
+            pairs = list(zip(rec.get("start", []), rec.get("solved", [])))
+            usable = lambda s: s["status"] in ("pass", "fail")
+            solved_usable = [b for _, b in pairs if usable(b)]
+            w["tasks"].append({
+                "task": task,
+                "wrote": bool(solved_usable),
+                "accepts_correct": bool(solved_usable) and all(b["status"] == "pass" for b in solved_usable),
+                "rejects_untouched": any(usable(a) and a["status"] == "fail" for a, _ in pairs),
+                "ideal": sum(1 for a, b in pairs if a["status"] == "fail" and b["status"] == "pass"),
+                "wrong_on_correct": sum(1 for _, b in pairs if b["status"] == "fail"),
+                "vacuous": sum(1 for a, b in pairs if a["status"] == "pass" and b["status"] == "pass"),
+                "broken": sum(1 for _, b in pairs if not usable(b)),
+                "checks": len(pairs),
+                "failed_writing": bool(rec["writer"].get("error")) or not rec["checks"],
+            })
+    print("## %s: %d tasks graded (reference solution passes the hidden tests)" % (Path(args.job).name, len(graded)))
+    if skipped:
+        print("   not graded: %s" % ", ".join(skipped))
+    print("\n%-8s %-35s %7s %9s %10s %6s  %6s %7s %7s %7s %7s  %8s" % (
+        "writer", "model", "wrote", "accepts", "rejects", "both", "checks", "ideal", "wrong", "vacuous", "broken", "$/task"))
+    print("%-8s %-35s %7s %9s %10s %6s  %6s %7s %7s %7s %7s" % ("", "", "checks", "correct", "untouched", "", "", "f->p", "->fail", "p->p", ""))
+    for name, w in per.items():
+        ts, n = w["tasks"], len(w["tasks"])
+        pct = lambda k: "%d%%" % round(100.0 * sum(t[k] for t in ts) / max(n, 1))
+        both = sum(1 for t in ts if t["accepts_correct"] and t["rejects_untouched"])
+        checks = sum(t["checks"] for t in ts)
+        share = lambda k: "%d%%" % round(100.0 * sum(t[k] for t in ts) / max(checks, 1))
+        print("%-8s %-35s %7s %9s %10s %6s  %6d %7s %7s %7s %7s  %8.4f" % (
+            name, (w["model"] or "")[:35], pct("wrote"), pct("accepts_correct"), pct("rejects_untouched"),
+            "%d%%" % round(100.0 * both / max(n, 1)), checks, share("ideal"), share("wrong_on_correct"),
+            share("vacuous"), share("broken"), w["cost"] / max(n, 1)))
+    if args.table:
+        names = list(per)
+        print("\n%-32s " % "task" + " ".join("%-12s" % n for n in names) + "   (A = accepts the correct solution, R = rejects the start)")
+        for i, task in enumerate(graded):
+            cells = []
+            for n in names:
+                t = per[n]["tasks"][i]
+                cells.append("%-12s" % ("%s%s %d/%d" % ("A" if t["accepts_correct"] else "-", "R" if t["rejects_untouched"] else "-",
+                                                        t["wrong_on_correct"], t["checks"])))
+            print("%-32s " % task[:32] + " ".join(cells))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("split")
+    e = sub.add_parser("checkeval")
+    e.add_argument("job", help="job dir of a tally.checkeval run")
+    e.add_argument("--table", action="store_true", help="one row per task")
     c = sub.add_parser("compare")
     c.add_argument("job", help="job dir of the layered agent")
     c.add_argument("--table", action="store_true", help="one row per task first")
     args = ap.parse_args()
-    {"split": split, "compare": compare}[args.cmd](args)
+    {"split": split, "compare": compare, "checkeval": checkeval}[args.cmd](args)
 
 
 if __name__ == "__main__":

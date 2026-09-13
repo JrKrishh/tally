@@ -186,69 +186,23 @@ class CheckedTerminus(Terminus2):
             self._report = self._format_report(usable)
 
     async def _write_checks(self) -> list[dict]:
-        entry = {"length_errors": 0}
+        entry = {}
         self._log["writer"] = entry
-        response = None
         try:
             listing = await self._env.exec("ls -la 2>&1 | head -50", timeout_sec=20)
-            prompt = WRITER.format(instruction=self._instruction, listing=(listing.stdout or "")[-2000:],
-                                   timeout=CHECK_TIMEOUT, max_checks=MAX_CHECKS)
-            # Nano sometimes thinks until max_tokens (1 in 3 calls on one writer prompt), which Harbor
-            # raises as OutputLengthExceededError. Sample again; last, with thinking switched off.
-            for extra in ({}, {}, {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}}):
-                try:
-                    start = time.time()
-                    response = await self._llm.call(prompt=prompt, message_history=[],
-                                                    **dict(self._llm_call_kwargs, **extra))
-                    self._track_api_request_time(start)
-                    self._update_subagent_metrics(response.usage)
-                    entry["thinking"] = not extra
-                    break
-                except OutputLengthExceededError:
-                    entry["length_errors"] += 1
+            start = time.time()
+            checks, response = await write_checks(self._llm, WRITER, self._instruction, listing.stdout or "",
+                                                   self._llm_call_kwargs, entry, self.options.recover_answers)
         except Exception as e:
             entry["error"] = repr(e)[:500]
-        if response is None:
             return []
-        if response.usage:
-            entry["tokens"] = [response.usage.prompt_tokens, response.usage.completion_tokens]
-        text = response.content or ""
-        blocks = CHECK_BLOCK.findall(text)[:MAX_CHECKS]
-        if not blocks and self.options.recover_answers and response.reasoning_content:
-            text = response.reasoning_content            # the same misfiling as the agent's turns
-            blocks = CHECK_BLOCK.findall(text)[-MAX_CHECKS:]
-            entry["from_reasoning"] = True
-        entry["response"] = text[-6000:]
-        checks = []
-        for requirement, script in blocks:
-            requirement, script = requirement.strip(), script.strip()
-            if UNSAFE.search(script):
-                entry.setdefault("unsafe", []).append({"requirement": requirement, "script": script})
-                continue
-            checks.append({"requirement": requirement, "script": script})
+        if response is not None:
+            self._track_api_request_time(start)
+            self._update_subagent_metrics(response.usage)
         return checks
 
     async def _run_check(self, check: dict) -> dict:
-        b64 = base64.b64encode(check["script"].encode("utf-8")).decode("ascii")
-        cmd = ("printf %s {b} | base64 -d > /tmp/.tally_check.sh && bash -n /tmp/.tally_check.sh 2>&1 || exit 99; "
-               "timeout {t} bash /tmp/.tally_check.sh 2>&1; code=$?; rm -f /tmp/.tally_check.sh; exit $code"
-               ).format(b=b64, t=CHECK_TIMEOUT)
-        result = dict(check)
-        try:
-            r = await self._env.exec(cmd, timeout_sec=CHECK_TIMEOUT + 30)
-        except Exception as e:
-            return dict(result, status="error", output=repr(e)[:300])
-        full = (r.stdout or "") + (r.stderr or "")
-        out = full[-600:]
-        # A script can print FAIL and still exit 0: a heredoc that fails, followed by "exit 0", does.
-        status = "pass" if r.return_code == 0 and not re.search(r"^\s*FAIL", full, re.M) else "fail"
-        if r.return_code == 99:
-            status = "broken"                            # the script itself does not parse
-        elif r.return_code == 127:
-            missing = re.findall(r"([\w.+-]+): (?:command )?not found", full)
-            if missing and missing[-1] not in self._instruction:
-                status = "broken"                        # the check needs a tool the task never mentions
-        return dict(result, status=status, exit=r.return_code, output=out)
+        return await run_check(self._env, check, self._instruction)
 
     def _format_report(self, usable: list[dict]) -> str:
         failed = [r for r in usable if r["status"] == "fail"]
@@ -266,3 +220,62 @@ class CheckedTerminus(Terminus2):
                      "instead of bending a correct solution to fit it. This was rejection %d of %d."
                      % (self._rejections, self.options.max_rejections))
         return "\n\n".join(parts)
+
+
+async def write_checks(llm, template, instruction, listing, call_kwargs, entry, recover=True):
+    """Ask llm for checks; log into entry. -> (checks, response, or None when every sample ran out).
+    Nano sometimes thinks until max_tokens (1 in 3 calls on one writer prompt), which Harbor raises
+    as OutputLengthExceededError: sample again, and last with thinking switched off."""
+    entry["length_errors"] = 0
+    prompt = template.format(instruction=instruction, listing=listing[-2000:],
+                             timeout=CHECK_TIMEOUT, max_checks=MAX_CHECKS)
+    response = None
+    for extra in ({}, {}, {"extra_body": {"chat_template_kwargs": {"enable_thinking": False}}}):
+        try:
+            response = await llm.call(prompt=prompt, message_history=[], **dict(call_kwargs, **extra))
+            entry["thinking"] = not extra
+            break
+        except OutputLengthExceededError:
+            entry["length_errors"] += 1
+    if response is None:
+        return [], None
+    if response.usage:
+        entry["tokens"] = [response.usage.prompt_tokens, response.usage.completion_tokens]
+    text = response.content or ""
+    blocks = CHECK_BLOCK.findall(text)[:MAX_CHECKS]
+    if not blocks and recover and response.reasoning_content:
+        text = response.reasoning_content                # the same misfiling as the agent's turns
+        blocks = CHECK_BLOCK.findall(text)[-MAX_CHECKS:]
+        entry["from_reasoning"] = True
+    entry["response"] = text[-6000:]
+    checks = []
+    for requirement, script in blocks:
+        requirement, script = requirement.strip(), script.strip()
+        if UNSAFE.search(script):
+            entry.setdefault("unsafe", []).append({"requirement": requirement, "script": script})
+            continue
+        checks.append({"requirement": requirement, "script": script})
+    return checks, response
+
+
+async def run_check(env, check: dict, instruction: str) -> dict:
+    b64 = base64.b64encode(check["script"].encode("utf-8")).decode("ascii")
+    cmd = ("printf %s {b} | base64 -d > /tmp/.tally_check.sh && bash -n /tmp/.tally_check.sh 2>&1 || exit 99; "
+           "timeout {t} bash /tmp/.tally_check.sh 2>&1; code=$?; rm -f /tmp/.tally_check.sh; exit $code"
+           ).format(b=b64, t=CHECK_TIMEOUT)
+    result = dict(check)
+    try:
+        r = await env.exec(cmd, timeout_sec=CHECK_TIMEOUT + 30)
+    except Exception as e:
+        return dict(result, status="error", output=repr(e)[:300])
+    full = (r.stdout or "") + (r.stderr or "")
+    out = full[-600:]
+    # A script can print FAIL and still exit 0: a heredoc that fails, followed by "exit 0", does.
+    status = "pass" if r.return_code == 0 and not re.search(r"^\s*FAIL", full, re.M) else "fail"
+    if r.return_code == 99:
+        status = "broken"                                # the script itself does not parse
+    elif r.return_code == 127:
+        missing = re.findall(r"([\w.+-]+): (?:command )?not found", full)
+        if missing and missing[-1] not in instruction:
+            status = "broken"                            # the check needs a tool the task never mentions
+    return dict(result, status=status, exit=r.return_code, output=out)
