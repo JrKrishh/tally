@@ -6,10 +6,11 @@ Status: **steps 1–5, first real evaluation complete.** The data is validated, 
 mechanism is measured, the cost figure is earned in simulation — **Terminal-Bench at
 17.7% of the tokens with the six-model ranking intact** — and the product has now run a
 real evaluation end to end: Harbor drove NVIDIA Nemotron 3 Nano on Nebius Token Factory
-through the cells the plan chose, on a Nebius AI Cloud VM. **Nemotron Nano scores an
-estimated 0.090 on Terminal-Bench 2.0, seventh of seven** — every planned task measured
-at least once, 120 verdicts, a data point nobody had. Second and third attempts are
-pending an API balance that ran out three hours in (step 5).
+through the cells the plan chose, on a Nebius AI Cloud VM. **Nemotron 3 Nano scores an
+estimated 0.079 on Terminal-Bench 2.0 (95% interval 0.035–0.131), seventh of seven** —
+every planned task attempted three times, 237 verdicts, $3.92 of inference, and a data
+point nobody had. Of the 13 tasks it ever solved, it solved 12 only some of the time
+(step 5).
 
 ## The problem
 
@@ -267,29 +268,35 @@ by Token Factory. Four hours wall-clock.
 
 | | |
 |---|---|
-| trials | 237 launched: 115 clean, 5 agent timeouts (20 min), **117 failed with HTTP 402** |
-| coverage | **every one of the 79 planned tasks has at least one verdict** (38 with one, 41 with two) |
-| verdicts | 120 — **13 passes across 11 tasks** |
-| tokens | 24.3M in, 2.9M out, **18.6M of the input served from cache** |
-| cost | **$2.16 at Token Factory list price** ($0.06/M in, $0.24/M out; no cache discount assumed) — plus ~$1 of VM time |
+| trials | **237 — every one of the 79 planned tasks attempted 3 times**, 0 infrastructure errors |
+| verdicts | 229 clean, 8 agent timeouts (20 min, scored as fails) |
+| passes | **21 across 13 tasks** |
+| tokens | 42.8M in, 5.6M out, **32.4M of the input served from cache** |
+| cost | **$3.92 at Token Factory list price** ($0.06/M in, $0.24/M out; no cache discount assumed) plus ~$3 of VM time |
 | skipped-cell check | 4 of 4 near-certain fails failed |
 
-**Nemotron 3 Nano 30B on Terminal-Bench 2.0, estimated over all 89 tasks: 0.090 — seventh
-of seven**, well below Opus 4's 0.407. That is the first number in this project that came
-from running an evaluation rather than replaying one, and it is a data point nobody has
-deposited: none of the six frontier models' logs say anything about a 30B model.
+**Nemotron 3 Nano 30B on Terminal-Bench 2.0, estimated over all 89 tasks: 0.079, with a
+95% interval of 0.035–0.131** (bootstrap over tasks and over attempts within each task).
+Seventh of seven: the weakest frontier model in the study, Opus 4, sits at 0.407, far
+outside that interval. It is the first number in this project that came from running an
+evaluation rather than replaying one, and a data point nobody has deposited — none of
+the six frontier models' logs say anything about a 30B model.
 
-The 402s are the Token Factory balance running out three hours in — the one input I
-could not verify from outside the console, and the one that failed. They cost nothing
-but the second and third attempts, which is why coverage is complete and depth is not.
-Two flips already visible in the depth we have: `git-leak-recovery` and `kv-store-grpc`
-failed in the validation run and passed here — the 12% per-attempt variance from step 1,
-live on a different model.
+**The consistency finding is sharper than the score.** Of the 79 tasks, 66 failed all
+three attempts and exactly one — `prove-plus-comm` — passed all three. The other **12
+tasks Nemotron Nano solved, it solved only some of the time**: 12 of its 13 successes do
+not reproduce reliably. A single-run leaderboard would report a model that can do those
+things; three attempts show a model that sometimes does. `git-leak-recovery` and
+`kv-store-grpc` failed in the validation run, passed in the full run, and it is exactly
+this kind of task that the extra attempts exist to catch.
 
-What it changed: the watchdog now stops the run on the first 402 instead of waiting for
-completions to stall (in-flight trials kept finishing for an hour after the balance
-died), and `run --job-name … --retry-errored` re-runs exactly the cells that failed on
-payment, leaving every verdict untouched.
+It took two sittings. Three hours into the first night the Token Factory balance ran out
+and 117 trials failed with HTTP 402 — the one input that could not be checked from outside
+the console. Nothing measured was lost: the watchdog now stops on the first 402 (in-flight
+trials had kept completing for an hour after the balance died, so a stall detector never
+fired), and after funds were added `run --job-name … --retry-errored` deleted exactly the
+payment-failed trial directories and Harbor re-ran those 117 cells the next morning in
+2 h 40 m for $1.76, every earlier verdict untouched.
 
 ## Reproduce
 

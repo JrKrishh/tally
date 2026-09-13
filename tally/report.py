@@ -174,8 +174,10 @@ def main():
         if t not in measured and rate(a) is not None:
             measured[t] = rate(a)
     tokens_run = sum(tok for a in run.values() for _, tok, _ in a)
-    errors = sum(1 for a in list(run.values()) + list(val.values()) for _, _, e in a if e)
-    n_attempts = sum(len(a) for a in run.values())
+    # An attempt is a trial that reached a verdict (a timeout scores 0 and counts). A trial
+    # that never reached the task -- a 402, a dead sandbox -- is an infrastructure error.
+    n_attempts = sum(1 for a in run.values() for x, _, _ in a if x is not None)
+    errors = sum(1 for a in list(run.values()) + list(val.values()) for x, _, e in a if e and x is None)
 
     # estimate over the whole benchmark: measured where run, prior where skipped
     prior = plan["skipped_prior"]
@@ -192,7 +194,7 @@ def main():
     est = float(np.mean(est_parts)) if est_parts else float("nan")
 
     print("## %s on %s (%s)" % (args.model, plan["benchmark"], plan["dataset"]))
-    print("  run phase   : %d tasks measured, %d attempts, %d errored trials" % (len(measured), n_attempts, errors))
+    print("  run phase   : %d tasks measured, %d attempts with a verdict, %d infrastructure errors" % (len(measured), n_attempts, errors))
     if not measured:
         print("  nothing measured: every trial errored, so there is no estimate and no ranking yet.")
         for t, atts in list(run.items())[:3]:

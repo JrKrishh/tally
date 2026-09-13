@@ -12,6 +12,11 @@ cd "$(dirname "$0")/.."
 
 ssh "$VM" 'cd ~/tally && find jobs -type f \( -name result.json -o -name trajectory.json -o -name reward.txt -o -name config.json \) | tar czf /tmp/tally-results.tgz -T -'
 scp "$VM:/tmp/tally-results.tgz" ./
+# Mirror, don't merge: a trial dir deleted on the VM (e.g. by --retry-errored) must not
+# survive here, or report counts it twice.
+for job in $(tar tzf tally-results.tgz | cut -d/ -f2 | sort -u); do
+  rm -rf "jobs/$job"
+done
 tar xzf tally-results.tgz
 rm -f tally-results.tgz
 python -m tally.report --plan data/plan_terminalbench.json
