@@ -342,6 +342,33 @@ fired), and after funds were added `run --job-name … --retry-errored` deleted 
 payment-failed trial directories and Harbor re-ran those 117 cells the next morning in
 2 h 40 m for $1.76, every earlier verdict untouched.
 
+### Does the plan hold for a model history never saw?
+
+Step 3 tested its plans only among six frontier models. The full run is the first chance
+to test them on a model outside that tier: 237 attempts make a three-attempt evaluation of
+79 tasks, so each plan can be replayed on Nemotron Nano's own trials — certainty taken from
+frontier history, attempts subsampled, 200 samples — and scored against the run's pass rate
+of 0.089. The bar was set before running: the default plan within 0.02 on average and 0.03
+per sample, on at most 70% of the tokens.
+
+| plan, replayed on Nano's 237 trials | tokens | estimate | bias | mean error |
+|---|---|---|---|---|
+| skip certain tasks, 3 attempts (the old default) | 83% | 0.284 | +0.195 | 0.195 |
+| **certain tasks once, uncertain twice (the default)** | **61%** | **0.089** | **+0.001** | **0.013** |
+| certain tasks once, uncertain 3 times | 88% | 0.089 | +0.001 | 0.013 |
+| no history: every task twice | 67% | 0.089 | +0.001 | 0.007 |
+| no history: every task once | 34% | 0.089 | +0.001 | 0.016 |
+
+The default clears the bar. The old default would have reported Nano at 0.284, three times
+its measured rate, because it filled in 21 tasks that frontier models almost always pass
+at about 0.95 — the validation run's warning, now measured across the whole run.
+
+The other finding is less flattering: **for this model, history buys nothing.** Running
+every task once with no history is nearly as accurate on half the tokens, because the tasks
+frontier models find uncertain are not the ones a much weaker model finds uncertain.
+History earned its 16% in step 3, among models of one tier. Across tiers, what keeps the
+estimate honest is that the plan measures every task, not what history knows.
+
 ## Step 6: can a layer lift a small model?
 
 Nemotron Nano ended 223 of its 237 trials by declaring the task complete, and 202 of those
@@ -433,6 +460,7 @@ python -m tally.plan --lo 0.10 --hi 1.0 --attempts 3 --validate 8   # step 5: th
 python -m tally.run --plan data/plan_terminalbench.json --phase validate -n 4   # step 5: check the skipped cells (Docker + NEBIUS_API_KEY)
 python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4        # step 5: the real evaluation
 python -m tally.report --plan data/plan_terminalbench.json                      # step 5: accuracy, rank, receipt, validation
+python -m tally.report --plan data/plan_terminalbench.json --replay             # step 5: step 3's plans replayed on the run's own attempts
 python -m tally.boost misfiled                                                  # step 6: answers filed as reasoning in the stock run
 python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checked:CheckedTerminus --ak max_rejections=2 -n 4
 python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checkeval:CheckEval --ak writers=nano-v1,nano,super,ultra --agent-timeout-multiplier 4 -n 3

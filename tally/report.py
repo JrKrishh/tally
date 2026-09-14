@@ -8,9 +8,11 @@ full evaluation would have cost, and -- the honest part -- whether the cells
 we chose NOT to run came out the way history said they would.
 
   python -m tally.report --plan data/plan_terminalbench.json [--jobs-dir jobs] [--model ...]
+  python -m tally.report --plan data/plan_terminalbench.json --replay   # step 3's plans on this run's attempts
 """
 import argparse
 import json
+import random
 import re
 import sys
 from pathlib import Path
@@ -117,12 +119,59 @@ def load_job(jobs_dir, prefix):
     return out, stats, jd
 
 
+REPLAY_PLANS = [  # label, attempts per uncertain task, attempts per certain task (0 imputes), uses history
+    ("skip certain tasks, 3 attempts (the old default)", 3, 0, True),
+    ("certain tasks once, uncertain twice (the default)", 2, 1, True),
+    ("certain tasks once, uncertain 3 times", 3, 1, True),
+    ("no history: every task twice", 2, 2, False),
+    ("no history: every task once", 1, 1, False),
+]
+
+
+def replay_plans(run_dir, benchmark, lo=0.10, hi=0.90):
+    """Step 3's plans replayed on a real run's own attempts: does a plan hold for a model the
+    history never saw? Truth is the run's pass rate over the tasks it attempted in full; each
+    plan subsamples those attempts, with certainty taken from history, over select.SEEDS samples.
+    Tokens come from site.trial_rows, the per-trial counts the receipt uses."""
+    from . import plan as planner, site
+    atts = {}
+    for r in site.trial_rows(run_dir):
+        atts.setdefault(r["task"], []).append((1.0 if r["outcome"] == "pass" else 0.0, float(r["tokens"])))
+    n = max(len(a) for a in atts.values())
+    tasks = sorted(t for t, a in atts.items() if len(a) == n)
+    diff = planner.history(benchmark)[0]
+    certain = set(t for t in tasks if t in diff and not lo <= diff[t] <= hi)
+    truth = float(np.mean([np.mean([p for p, _ in atts[t]]) for t in tasks]))
+    full = sum(tok for t in tasks for _, tok in atts[t])
+    print("## plans replayed on this run: %d tasks x %d attempts, pass rate %.3f; history calls %d of them certain"
+          % (len(tasks), n, truth, len(certain)))
+    print("  %-50s %7s %9s %7s %11s" % ("plan", "tokens", "estimate", "bias", "mean |err|"))
+    for label, k, k_certain, use_history in REPLAY_PLANS:
+        est, cost = [], []
+        for seed in range(select.SEEDS):
+            rng, total, spent = random.Random(seed), 0.0, 0.0
+            for t in tasks:
+                cap = k_certain if use_history and t in certain else k
+                if not cap:
+                    total += diff[t]                   # impute from history, spend nothing
+                    continue
+                sample = list(atts[t])
+                rng.shuffle(sample)
+                total += float(np.mean([p for p, _ in sample[:cap]]))
+                spent += sum(tok for _, tok in sample[:cap])
+            est.append(total / len(tasks))
+            cost.append(spent / full)
+        err = float(np.mean(np.abs(np.array(est) - truth)))
+        print("  %-50s %6.0f%% %9.3f %+7.3f %11.3f" % (label, 100 * np.mean(cost), np.mean(est), np.mean(est) - truth, err))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--plan", required=True)
     ap.add_argument("--jobs-dir", default=str(ROOT / "jobs"))
     ap.add_argument("--model", default="nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B")
     ap.add_argument("--inspect", action="store_true", help="dump the structure of the first trial result and exit")
+    ap.add_argument("--replay", action="store_true", help="replay step 3's plans on the run's own attempts and exit")
     args = ap.parse_args()
     plan = json.load(open(args.plan))
     slug = re.sub(r"[^A-Za-z0-9]+", "-", args.model).strip("-")
@@ -158,6 +207,11 @@ def main():
     run, val = run or {}, val or {}
     if not run and not val:
         sys.exit("no results under %s for %s -- run: python -m tally.run" % (args.jobs_dir, args.model))
+    if args.replay:
+        if not rdir:
+            sys.exit("no run job to replay under %s" % args.jobs_dir)
+        replay_plans(rdir, plan["benchmark"])
+        return
     if rdir:
         print("  run job: %s   trials: %s completed, %s errored, %s pending%s"
               % (rdir.name, rstats.get("n_completed_trials"), rstats.get("n_errored_trials"), rstats.get("n_pending_trials"),
