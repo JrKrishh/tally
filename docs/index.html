@@ -227,6 +227,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .mark-miss { color: var(--critical-ink); }
 .mark-ok svg, .mark-miss svg { width: 13px; height: 13px; }
 
+/* the layer experiment */
+.layer-grid { display: grid; grid-template-columns: 1fr minmax(260px, 340px); gap: 20px; align-items: start; }
+@media (max-width: 940px) { .layer-grid { grid-template-columns: 1fr; } }
+.tiles.one { grid-template-columns: 1fr; margin-top: 0; }
+.tiles.one .v { font-size: 30px; }
+.bar-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+.bar-cell .track { flex: 1; height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+.bar-cell .fill { display: block; height: 100%; border-radius: 4px; }
+
 /* how it works */
 .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; counter-reset: step; }
 .step { display: grid; gap: 10px; align-content: start; }
@@ -259,6 +268,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
     <nav aria-label="Sections">
       <a href="#planner">Planner</a>
       <a href="#run">Real run</a>
+      <a href="#layer">Experiment</a>
       <a href="#how">How it works</a>
       <a href="https://github.com/JrKrishh/tally">GitHub</a>
     </nav>
@@ -275,6 +285,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <span>SWE-bench Pro · 54 tasks</span>
       <span>6 frontier models of history</span>
       <span>1 model run for real</span>
+      <span>1 agent layer tested on held-out tasks</span>
     </div>
   </div>
 
@@ -439,6 +450,42 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
     </div>
   </section>
 
+  <section id="layer" aria-labelledby="layer-h">
+    <div class="wrap">
+      <header>
+        <p class="eyebrow">One idea, tested once</p>
+        <h2 id="layer-h">Can a layer lift a small model?</h2>
+        <p class="lede" id="layer-lede">Nemotron Nano ended most of its trials by declaring the task done, and most of those claims were false. The fix to try without training anything is a layer around the agent: it reads answers the stock agent threw away, and it answers "done" with shell checks written from the task text, sending failures back to the agent. Every choice was made on 40 dev tasks; the other 39 were split off before any trajectory was read, then run once.</p>
+      </header>
+      <div class="layer-grid">
+        <div class="panel">
+          <div class="chart-head">
+            <h3>Change in pass rate with the layer, same tasks as the stock agent</h3>
+            <div class="legend" aria-hidden="true">
+              <span><i style="background:var(--accent)"></i>Held-out, run once</span>
+              <span><i style="background:var(--muted)"></i>Dev, used for tuning</span>
+            </div>
+          </div>
+          <div class="chart" id="forest"></div>
+          <details class="tablebox">
+            <summary>Show as table</summary>
+            <div class="scroll"><table id="forest-table"></table></div>
+          </details>
+          <p class="note" style="margin-top:10px" id="forest-note"></p>
+        </div>
+        <div class="tiles one" id="layer-tiles"></div>
+      </div>
+      <div class="panel" style="margin-top:20px">
+        <div class="chart-head">
+          <h3>Who should write the checks?</h3>
+        </div>
+        <p class="note" id="writers-note" style="margin-bottom:12px"></p>
+        <div class="scroll" style="overflow-x:auto"><table id="writers-table"></table></div>
+      </div>
+      <p class="callout" id="layer-callout"></p>
+    </div>
+  </section>
+
   <section id="how" aria-labelledby="how-h">
     <div class="wrap">
       <header>
@@ -464,7 +511,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       </div>
       <div class="stackline">
         <div><b>Nebius Token Factory</b>serves Nemotron to the agent; prices the receipt</div>
-        <div><b>NVIDIA Nemotron 3</b>Nano as the agent, Super as the cold-start reader</div>
+        <div><b>NVIDIA Nemotron 3</b>Nano as the agent, Super as the cold-start reader, Super and Ultra graded as check writers</div>
         <div><b>Nebius AI Cloud</b>cpu-d3 VM running the Docker sandboxes</div>
         <div><b>Harbor + Terminus-2</b>the Terminal-Bench 2.0 harness and agent</div>
         <div><b>Every Eval Ever</b>13,915 frontier-model trajectories as history</div>
@@ -482,6 +529,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           <li>History is six models of one tier. The validation run shows what that costs for a weaker model.</li>
           <li>SWE-bench Pro here is a 54-task subset with 40 tasks shared by all six models.</li>
           <li>The frontier logs used generous 10M / 30M token budgets; the Nemotron run used far tighter ones.</li>
+          <li>The layer experiment is one design on one small model. A model that repairs better might gain from the same checks.</li>
         </ul>
       </div>
       <div>
@@ -489,7 +537,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
         <h2 style="margin:10px 0 16px">Code, data and feedback</h2>
         <ul class="limits">
           <li><a href="https://github.com/JrKrishh/tally">github.com/JrKrishh/tally</a>: MIT licensed; the README walks every number on this page back to the command that produced it.</li>
-          <li><a href="https://github.com/JrKrishh/tally/blob/main/FEEDBACK.md">FEEDBACK.md</a>: fourteen reproducible findings on Token Factory, Nemotron, Harbor and Every Eval Ever.</li>
+          <li><a href="https://github.com/JrKrishh/tally/blob/main/FEEDBACK.md">FEEDBACK.md</a>: sixteen reproducible findings on Token Factory, Nemotron, Harbor and Every Eval Ever.</li>
           <li>This page is generated by <code>python -m tally.site</code> from the same local results.</li>
         </ul>
       </div>

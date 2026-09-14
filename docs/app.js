@@ -349,6 +349,134 @@
     html("td", { colspan: 3, class: "note", style: "white-space:normal;border:0;padding-top:8px" }, tf, "Spearman correlation with true task difficulty; 0 is no signal.");
   }
 
+  // ------------------------------------------------------------------ the layer experiment
+  function pct(v) { return Math.round(v * 100) + "%"; }
+  function frac(p) { return p[0] + "/" + p[1]; }
+
+  function renderForest() {
+    var L = D.layer, box = document.getElementById("forest");
+    clear(box);
+    var rows = [
+      { key: "heldout", name: "Held-out", r: L.heldout, color: "var(--accent)", ink: "var(--ink)" },
+      { key: "dev", name: "Dev", r: L.dev, color: "var(--muted)", ink: "var(--ink-2)" }
+    ];
+    var W = Math.max(300, box.clientWidth || 600), narrow = W < 560;
+    var left = narrow ? 92 : 132, right = narrow ? 14 : 200, top = 12, rowH = narrow ? 70 : 54, bottom = 40;
+    var H = top + rows.length * rowH + bottom;
+    var span = Math.max(0.2, Math.ceil(Math.max.apply(null, rows.map(function (o) { return Math.max(Math.abs(o.r.ci[0]), Math.abs(o.r.ci[1])); })) * 20) / 20);
+    var x = function (v) { return left + (v + span) / (2 * span) * (W - left - right); };
+    var s = svg("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H }, box);
+    for (var tv = -span; tv <= span + 1e-9; tv += 0.1) {
+      var v = Math.round(tv * 10) / 10;
+      svg("line", { x1: x(v), x2: x(v), y1: top, y2: H - bottom, stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": v === 0 ? 1.5 : 1 }, s);
+      svg("text", { x: x(v), y: H - bottom + 16, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, s).textContent = v === 0 ? "0" : signed(v).replace(/0+$/, "").replace(/\.$/, "");
+    }
+    svg("text", { x: x(-span), y: H - 6, "font-size": 11, fill: "var(--muted)" }, s).textContent = "← stock agent better";
+    svg("text", { x: x(span), y: H - 6, "text-anchor": "end", "font-size": 11, fill: "var(--muted)" }, s).textContent = "layer better →";
+
+    rows.forEach(function (o, i) {
+      var r = o.r, cy = top + i * rowH + rowH / 2 - (narrow ? 8 : 0);
+      var g = svg("g", {}, s);
+      svg("text", { x: 0, y: cy - 2, "font-size": 13, fill: o.ink, "font-weight": o.key === "heldout" ? 600 : 400 }, g).textContent = o.name;
+      svg("text", { x: 0, y: cy + 14, "font-size": 11, fill: "var(--muted)" }, g).textContent = r.tasks + " tasks × " + r.attempts;
+      var a = x(r.ci[0]), b = x(r.ci[1]), c = x(r.diff);
+      svg("line", { x1: a, x2: b, y1: cy, y2: cy, stroke: o.color, "stroke-width": 2 }, g);
+      svg("line", { x1: a, x2: a, y1: cy - 6, y2: cy + 6, stroke: o.color, "stroke-width": 2 }, g);
+      svg("line", { x1: b, x2: b, y1: cy - 6, y2: cy + 6, stroke: o.color, "stroke-width": 2 }, g);
+      svg("circle", { cx: c, cy: cy, r: 6, fill: o.color, stroke: "var(--surface)", "stroke-width": 2 }, g);
+      var label = signed(r.diff) + "  (" + signed(r.ci[0]) + " to " + signed(r.ci[1]) + ")";
+      if (narrow) {
+        svg("text", { x: Math.min(Math.max(c, left + 70), W - 70), y: cy + 24, "text-anchor": "middle", "font-size": 12, fill: o.ink, style: "font-variant-numeric: tabular-nums" }, g).textContent = label;
+      } else {
+        svg("text", { x: W - right + 14, y: cy + 4, "font-size": 12, fill: o.ink, style: "font-variant-numeric: tabular-nums" }, g).textContent = label;
+      }
+      var hit = svg("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent" }, g);
+      bindTip(hit, [
+        { text: signed(r.diff) + " pass rate" },
+        { text: o.name + " · " + r.tasks + " tasks × " + r.attempts + " attempt" + (r.attempts > 1 ? "s" : "") },
+        { text: "stock agent " + f3(r.stock) + " → with layer " + f3(r.layer), muted: true },
+        { text: "passes " + frac(r.stock_passes) + " → " + frac(r.layer_passes), muted: true },
+        { text: "95% interval " + signed(r.ci[0]) + " to " + signed(r.ci[1]), muted: true }
+      ], o.name + ": change " + signed(r.diff) + ", 95% interval " + signed(r.ci[0]) + " to " + signed(r.ci[1]));
+    });
+
+    var t = document.getElementById("forest-table");
+    clear(t);
+    var hr = html("tr", {}, html("thead", {}, t));
+    ["Tasks", "Attempts", "Stock agent", "With layer", "Change", "95% interval", "Passes"].forEach(function (h, i) { html("th", i > 0 ? { class: "num" } : {}, hr, h); });
+    var tb = html("tbody", {}, t);
+    rows.forEach(function (o) {
+      var r = o.r, tr = html("tr", {}, tb);
+      html("td", {}, tr, o.name + " · " + r.tasks);
+      html("td", { class: "num" }, tr, String(r.attempts));
+      html("td", { class: "num" }, tr, f3(r.stock));
+      html("td", { class: "num" }, tr, f3(r.layer));
+      html("td", { class: "num" }, tr, signed(r.diff));
+      html("td", { class: "num" }, tr, signed(r.ci[0]) + " to " + signed(r.ci[1]));
+      html("td", { class: "num" }, tr, frac(r.stock_passes) + " → " + frac(r.layer_passes));
+    });
+  }
+
+  function renderLayer() {
+    var L = D.layer, h = L.heldout, d = L.dev, m = L.misfiled;
+    var fc = h.false_claims.stock;
+    document.getElementById("layer-lede").textContent =
+      "On these held-out tasks, " + fc[0] + " of the stock agent's " + fc[1] + " “done” claims were false. " +
+      "The fix to try without training anything is a layer around the agent: it reads answers the stock agent threw away, " +
+      "and it answers “done” with shell checks written from the task text, sending failures back. Every choice was made on " +
+      "40 dev tasks; the other " + h.tasks + " were split off before any trajectory was read, then run once, " + h.attempts + " attempts each.";
+    document.getElementById("forest-note").textContent =
+      "Pass rate is each task's pass fraction averaged over tasks; intervals bootstrap over tasks. Dev ran one attempt per task on a laptop " +
+      "(4 of 40 tasks never started); held-out ran on the same Nebius VM as the stock baseline. Inference: $" + d.inference_usd.toFixed(2) +
+      " dev, $" + h.inference_usd.toFixed(2) + " held-out.";
+
+    var tiles = document.getElementById("layer-tiles");
+    clear(tiles);
+    function tile(k, v, sub) {
+      var n = html("div", { class: "tile" }, tiles);
+      html("span", { class: "k" }, n, k); html("span", { class: "v" }, n, v); html("span", { class: "s" }, n, sub);
+    }
+    tile("Stock-agent turns thrown away", pct(m.misfiled / m.turns),
+      intc(m.misfiled) + " of " + intc(m.turns) + " came back with the answer filed as reasoning. The layer reads those answers; the pass rate still didn't rise.");
+    tile("“Done” claims rejected, held-out", String(h.rejected),
+      h.gained.length + " tasks gained, " + h.lost.length + " lost. False claims " + pct(h.false_claims.stock[0] / h.false_claims.stock[1]) +
+      " → " + pct(h.false_claims.layer[0] / h.false_claims.layer[1]) + ".");
+    var ps = h.per_trial.stock, pl = h.per_trial.layer;
+    tile("Cost per trial", (pl.usd / ps.usd).toFixed(1) + "×",
+      "$" + pl.usd.toFixed(3) + " vs $" + ps.usd.toFixed(3) + "; " + pl.turns.toFixed(1) + " vs " + ps.turns.toFixed(1) + " turns.");
+
+    var W = L.writers, best = Math.max.apply(null, W.rows.map(function (w) { return w.accepts_correct; }));
+    var strict = W.rows.filter(function (w) { return w.prompt === "stricter"; });
+    document.getElementById("writers-note").textContent =
+      "Each writer's checks ran on the untouched task, then again after Terminal-Bench's reference solution, on the " + W.graded +
+      " dev tasks whose reference solution passes its own tests. A useful set of checks rejects the first and accepts the second. " +
+      "On the same prompt, the bigger models did worse: " + strict.map(function (w) { return w.model.replace("Nemotron 3 ", "") + " " + pct(w.accepts_correct); }).join(", ") + ".";
+    var t = document.getElementById("writers-table");
+    clear(t);
+    var hr = html("tr", {}, html("thead", {}, t));
+    ["Writer", "Prompt", "Accepts a correct solution", "Rejects untouched", "Wrong checks", "$ / task"].forEach(function (x, i) { html("th", i > 2 ? { class: "num" } : {}, hr, x); });
+    var tb = html("tbody", {}, t);
+    W.rows.forEach(function (w) {
+      var tr = html("tr", {}, tb);
+      html("td", {}, tr, w.model);
+      html("td", {}, tr, w.prompt);
+      var cellTd = html("td", {}, tr), bc = html("div", { class: "bar-cell" }, cellTd);
+      var track = html("span", { class: "track", "aria-hidden": "true" }, bc);
+      html("span", { class: "fill", style: "width:" + Math.round(w.accepts_correct * 100) + "%;background:" + (w.accepts_correct === best ? "var(--accent)" : "var(--deemph)") }, track);
+      html("span", { class: "mono" }, bc, pct(w.accepts_correct));
+      html("td", { class: "num" }, tr, pct(w.rejects_untouched));
+      html("td", { class: "num" }, tr, pct(w.wrong));
+      html("td", { class: "num" }, tr, "$" + w.usd_per_task.toFixed(4));
+    });
+
+    var v = h.verdicts;
+    document.getElementById("layer-callout").textContent =
+      "The part a layer can't supply is the repair. When the checks said fail on held-out, the hidden tests agreed " + v.fail_fail + " of " +
+      (v.fail_fail + v.fail_pass) + " times, yet " + h.rejected + " rejections bought " + h.gained.length + " new tasks and lost " + h.lost.length +
+      ". The distance from Nano to the frontier models is the model, not the scaffold. Recovering misfiled answers is still a platform fix worth making.";
+    renderForest();
+  }
+
   // ------------------------------------------------------------------ boot
   renderPlanner();
   renderRanking();
@@ -356,16 +484,18 @@
   renderReceipt();
   renderValidation();
   renderCold();
+  renderLayer();
 
   var pending = false;
   function rerender() {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(function () { pending = false; renderDumbbell(cell(), D.planner[state.bench]); renderRanking(); });
+    requestAnimationFrame(function () { pending = false; renderDumbbell(cell(), D.planner[state.bench]); renderRanking(); renderForest(); });
   }
   if ("ResizeObserver" in window) {
     new ResizeObserver(rerender).observe(document.getElementById("dumbbell"));
     new ResizeObserver(rerender).observe(document.getElementById("ranking"));
+    new ResizeObserver(rerender).observe(document.getElementById("forest"));
   } else {
     window.addEventListener("resize", rerender);
   }

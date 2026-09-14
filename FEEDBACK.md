@@ -79,32 +79,47 @@ Terminal-Bench (self-contained task text) and 0.13 on SWE-bench Pro (issue text 
 repo it cannot see), where issue length alone did better at −0.38. A reasoning model
 reading a task is not a substitute for a look at the codebase.
 
+**10. The bigger Nemotron 3 models wrote worse acceptance checks than the small one.** Asked for
+shell checks from a Terminal-Bench task's text, then graded on 34 tasks by running the checks on
+the task's own reference solution (they should pass) and on the untouched task (they should fail):
+with the same prompt, Nano 30B accepted the correct solution on 24% of tasks, Super 120B and
+Ultra 550B on 18%. The larger models write longer scripts that break on details — comparing an
+`openssl x509 -subject` line against `-issuer` with the prefixes still attached, parsing OpenSSL 3's
+key output with an OpenSSL 1 pattern, fingerprints with and without colons. At $0.0091 per task
+Ultra cost about eight times Nano's $0.0011 for worse checks. Command: `python -m tally.boost checkeval`.
+
 ## Harbor (the Terminal-Bench harness — not a Nebius product, but on the path)
 
-**10. `max_thinking_tokens` is silently ignored for every model that is not Anthropic's.**
+**11. `max_thinking_tokens` is silently ignored for every model that is not Anthropic's.**
 `harbor/llms/lite_llm.py` adds the thinking budget only when the model name contains
 `anthropic` or `claude`. Passing `--ak max_thinking_tokens=2048` for Nemotron is accepted,
 validated, recorded in the job config, and does nothing, so a published run can state a
 thinking cap it never had — this project's README did until the check. Suggestion: warn or
 reject when the option cannot apply.
 
-**11. Trial results are written with `Path.write_text()` and no encoding.** On Windows that
+**12. Trial results are written with `Path.write_text()` and no encoding.** On Windows that
 is cp1252; the first stored model message containing `≈` raised `UnicodeEncodeError` at
 the final write of a finished 11-minute trial and lost its summary while everything under
 the trial directory survived. Workaround: `PYTHONUTF8=1`. Fix: `encoding="utf-8"` in
 `harbor/trial/trial.py:470`.
 
-**12. `--dry-run` requires a running Docker daemon**, though it downloads nothing and runs
+**13. `--dry-run` requires a running Docker daemon**, though it downloads nothing and runs
 nothing. It cannot validate a config on a machine without Docker.
+
+**14. Pulled task images are never removed.** `harbor run --delete` (the default) removes each
+trial's containers, but Terminal-Bench's environments are pulled images (`alexgshaw/<task>`), and
+nothing deletes those. A 40-task run on a laptop took free disk from 108 GB to 29 GB; the four
+largest images alone are 62 GB (two `mteb-*` tasks at 21.6 GB each). Suggestion: remove a pulled
+image after its last trial, or document that Docker space has to be managed by hand.
 
 ## Every Eval Ever (the data source)
 
-**13. `snapshot_download` silently matches nothing on the datastore.** The Hub returns an
+**15. `snapshot_download` silently matches nothing on the datastore.** The Hub returns an
 empty siblings list for a repository this size, so `allow_patterns` filters nothing and
 the call reports success in one second with zero files. Workaround: the per-collection
 tree API plus `hf_hub_download`.
 
-**14. Shard aggregates undercount attempts 2–3×.** `source_data.sample_ids` plus the
+**16. Shard aggregates undercount attempts 2–3×.** `source_data.sample_ids` plus the
 `+Nep` epoch count implies a matrix that the samples contradict on every (model, task)
 pair — adaptive sampling makes `+Nep` a ceiling, and eight shards carry 1,600 rows with
 no task list. Anyone counting from aggregates gets a third of the data.

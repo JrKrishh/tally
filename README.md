@@ -2,18 +2,20 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-**Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, and the Nemotron run's results and receipt.
+**Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, the Nemotron run's results and receipt, and the layer experiment.
 
-Status: **steps 1–5, first real evaluation complete.** The data is validated, the
-mechanism is measured, the cost figure is earned in simulation — **Terminal-Bench at
-17.7% of the tokens with the six-model ranking intact** — and the product has now run a
-real evaluation end to end: Harbor drove NVIDIA Nemotron 3 Nano on Nebius Token Factory
-through the cells the plan chose, on a Nebius AI Cloud VM. **Nemotron 3 Nano scores an
-estimated 0.079 on Terminal-Bench 2.0 (95% interval 0.035–0.131), last of five against
-the frontier models' runs without correctness feedback on the same tasks** —
-every planned task attempted three times, 237 verdicts, $3.92 of inference, and a data
-point nobody had. Of the 13 tasks it ever solved, it solved 12 only some of the time
-(step 5).
+Status: **steps 1–6: the first real evaluation, and one agent layer tested on held-out
+tasks.** The data is validated, the mechanism is measured, the cost figure is earned in
+simulation — **Terminal-Bench at 17.7% of the tokens with the six-model ranking intact**
+— and the product has now run a real evaluation end to end: Harbor drove NVIDIA Nemotron
+3 Nano on Nebius Token Factory through the cells the plan chose, on a Nebius AI Cloud
+VM. **Nemotron 3 Nano scores an estimated 0.079 on Terminal-Bench 2.0 (95% interval
+0.035–0.131), last of five against the frontier models' runs without correctness
+feedback on the same tasks** — every planned task attempted three times, 237 verdicts,
+$3.92 of inference, and a data point nobody had. Of the 13 tasks it ever solved, it
+solved 12 only some of the time (step 5). **A verify-before-done layer around the agent
+does not lift it:** tuned on 40 tasks and run once on 39 held-out tasks, it changed the
+pass rate by −0.009 (95% interval −0.051 to +0.034) at 1.8× the cost per trial (step 6).
 
 ## The problem
 
@@ -324,6 +326,80 @@ fired), and after funds were added `run --job-name … --retry-errored` deleted 
 payment-failed trial directories and Harbor re-ran those 117 cells the next morning in
 2 h 40 m for $1.76, every earlier verdict untouched.
 
+## Step 6: can a layer lift a small model?
+
+Nemotron Nano ended 223 of its 237 trials by declaring the task complete, and 202 of those
+claims failed the hidden tests. That points at a fix that needs no training: a layer around
+the agent that won't take "done" without evidence. It was tested the way a claim should be —
+tuned on one half of the tasks, reported on the other, with the halves split before a single
+trajectory was read.
+
+**The split.** `python -m tally.boost split` drew it once from the 79 tasks the stock agent
+ran, stratified by whether the stock agent ever solved the task, and it was committed before
+any tuning (0f0bd04): 40 dev tasks with a stock pass rate of 0.100, 39 held-out at 0.077.
+
+**The layer** (`tally/checked.py`, a Terminus-2 subclass that Harbor loads by import path)
+does two things.
+
+1. *It reads answers the stock agent threw away.* The stock trajectories held a loss that
+   happened before the model did anything wrong: 703 of 3,908 turns (18%) came back with
+   `content` empty and the JSON answer in `reasoning_content`. They are the turns where
+   Nano answered without thinking — median 273 completion tokens against 797, and in 245 of
+   them the "reasoning" opens with `{` or a code fence, which 7 of 3,183 normal turns do.
+   Terminus-2 reads only `content`, so each one became a parse error. The layer takes the
+   last complete answer from the reasoning instead, and never an outline with `...` in its
+   commands.
+2. *It checks "done" before accepting it.* On the first completion claim, a separate Nano
+   call writes up to six shell checks from the task text and a directory listing — never the
+   agent's work, the hidden tests (Harbor uploads those after the agent stops) or any
+   solution. They run in the task container; if any fails, the agent gets the failures with
+   their output and keeps working, up to two rejections.
+
+**Dev: +0.056, 95% interval −0.056 to +0.167** (36 of 40 tasks; four multi-GB images never
+started on the laptop). Two tasks gained, three lost, and two faults of the kind a tuning run
+exists to find: a recovered outline (`cat > plus_comm.v <<'EOF'...EOF`) left the shell
+inside a heredoc for the rest of a task the stock agent solves every time, and of the 13
+final answers the checks passed, 11 failed the hidden tests.
+
+**Who should write the checks?** `tally.checkeval` measures that without any agent. On each
+dev task it runs every writer's checks on the untouched task, then again after Terminal-Bench's
+reference solution; a useful set of checks rejects the first and accepts the second.
+
+| writer | prompt | accepts a correct solution | rejects the untouched task | wrong checks | $ per task |
+|---|---|---|---|---|---|
+| Nemotron 3 Nano 30B | original | **29%** | 100% | 35% | 0.0010 |
+| Nemotron 3 Nano 30B | stricter | 24% | 88% | 38% | 0.0011 |
+| Nemotron 3 Super 120B | stricter | 18% | 94% | 44% | 0.0052 |
+| Nemotron 3 Ultra 550B | stricter | 18% | 100% | 37% | 0.0091 |
+
+These are the 34 dev tasks whose reference solution passes its own tests. On the same prompt,
+the bigger models did worse: they write longer shell, and it breaks on details — a `subject=`
+compared against an `issuer=` prefix, OpenSSL 3's key output, fingerprint colons. The
+stricter prompt, written after dev, hurt every writer, so held-out kept the original. A
+threshold doesn't rescue the rule either (`tally.boost thresholds`): rejecting only when half
+the checks fail accepts 62% of correct solutions but catches 37% of Nano's wrong final answers,
+against 29% and 59% for rejecting on any failure. With 88% of Nano's claims false, "any"
+stayed.
+
+**Held-out, run once**, on the same Nebius VM that ran the stock baseline:
+
+| 39 tasks × 3 attempts | stock agent | with layer |
+|---|---|---|
+| pass rate | 0.077 (9 of 117) | 0.068 (8 of 116) |
+| "done" claims that were false | 92% | 92% |
+| turns per trial | 16.3 | 21.3 |
+| cost per trial | $0.015 | $0.028 |
+| timeouts | 7 | 6 |
+
+**Paired difference −0.009, 95% interval −0.051 to +0.034. The layer does not lift Nemotron
+Nano.** It issued 172 rejections, and when its checks said fail the hidden tests agreed 69 of
+75 times — yet the rejections bought two new tasks (`merge-diff-arc-agi-task`,
+`nginx-request-logging`) and lost two (`cancel-async-tasks`, `custom-memory-heap-crash`). The
+checks point at real failures; Nano mostly cannot repair them. The distance from 0.04 to the
+frontier's 0.5–0.6 is the model, not the scaffold. The misfiled answers remain a platform fix
+worth making ([FEEDBACK.md](FEEDBACK.md) item 1). The whole experiment cost $1.11 of inference
+on dev, $0.63 for the check writers and $3.20 on held-out.
+
 ## Reproduce
 
 ```bash
@@ -341,6 +417,15 @@ python -m tally.plan --lo 0.10 --hi 1.0      # step 5: cells to run for a new mo
 python -m tally.run --plan data/plan_terminalbench.json --phase validate -n 4   # step 5: check the skipped cells (Docker + NEBIUS_API_KEY)
 python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4        # step 5: the real evaluation
 python -m tally.report --plan data/plan_terminalbench.json                      # step 5: accuracy, rank, receipt, validation
+python -m tally.boost misfiled                                                  # step 6: answers filed as reasoning in the stock run
+python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checked:CheckedTerminus --ak max_rejections=2 -n 4
+python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checkeval:CheckEval --ak writers=nano-v1,nano,super,ultra --agent-timeout-multiplier 4 -n 3
+python -m tally.boost checkeval jobs/<checkeval job>                            # step 6: the writer table
+python -m tally.boost thresholds jobs/<checkeval job> jobs/<dev job>            # step 6: any failure vs a share of failures
+python -m tally.run --plan data/plan_terminalbench.json --split heldout --attempts 3 --agent tally.checked:CheckedTerminus --ak max_rejections=2 -n 4
+python -m tally.boost compare jobs/<held-out job> --table                       # step 6: the paired result
+.venv-harbor/Scripts/python tests/test_checked.py                               # the layer's tests, in Harbor's Python
+python -m tally.site                                                            # rebuild docs/data.js for the demo page
 ```
 
 `snapshot_download` does not work on this datastore — the Hub returns an empty
@@ -364,6 +449,10 @@ puller lists each collection through the tree API and fetches per file instead.
   The 54 remain distinct, so joins work, but never trust the suffix.
 - **SWE-bench Pro is a 54-task subset**, not the full benchmark; ~1,700 of its
   attempts come from shards whose condition is unlabelled.
+- **One layer, one small model.** Step 6 tests one design on Nemotron Nano. A model that
+  repairs what the checks flag could gain from the same layer; this one did not. The dev run
+  was on a laptop and the held-out run on the VM, so only held-out is comparable to the
+  baseline.
 
 ## License
 
