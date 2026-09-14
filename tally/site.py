@@ -22,6 +22,11 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 JOB = "tally-terminalbench-run-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260912-165615"
 VALIDATE_PREFIX = "tally-terminalbench-validate-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-"
+LAYER_DEV_JOB = "tally-terminalbench-dev-CheckedTerminus-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-143224"
+LAYER_HELDOUT_JOB = "tally-terminalbench-heldout-CheckedTerminus-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-154405"
+CHECKEVAL_JOB = "tally-terminalbench-dev-CheckEval-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-181951"
+WRITER_NAMES = {"nano-v1": ("Nemotron 3 Nano 30B", "original"), "nano": ("Nemotron 3 Nano 30B", "stricter"),
+                "super": ("Nemotron 3 Super 120B", "stricter"), "ultra": ("Nemotron 3 Ultra 550B", "stricter")}
 THRESHOLDS = [0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
 ATTEMPTS = [1, 2, 3, 5, None]
 PRICE_IN, PRICE_OUT, VM_PER_HOUR = 0.06e-6, 0.24e-6, 0.23
@@ -205,6 +210,44 @@ def cold_start():
     return out
 
 
+def layer():
+    """The verify-before-done layer experiment: dev and held-out paired against the stock agent, the
+    check-writer grade, and the misfiled answers that motivated half of it."""
+    from . import boost
+    r3 = lambda v: round(v, 3)
+
+    def run(job):
+        p = boost.paired(ROOT / "jobs" / job)
+        s, l = p["per_trial"]["stock"], p["per_trial"]["layer"]
+        return {
+            "tasks": p["tasks"], "trials": p["trials"], "attempts": round(p["trials"] / p["tasks"]),
+            "stock": r3(p["stock"]), "layer": r3(p["layer"]), "diff": r3(p["diff"]), "ci": [r3(c) for c in p["ci"]],
+            "stock_passes": p["stock_passes"], "layer_passes": p["layer_passes"],
+            "gained": p["gained"], "lost": p["lost"], "false_claims": p["false_claims"],
+            "rejected": p["decisions"].get("rejected", 0), "verdicts": p["verdicts"],
+            "recovered_turns": p["recovered_turns"],
+            "per_trial": {"stock": {"turns": round(s["turns"], 1), "usd": round(s["usd"], 4), "timeouts": s["timeouts"], "trials": s["trials"]},
+                          "layer": {"turns": round(l["turns"], 1), "usd": round(l["usd"], 4), "timeouts": l["timeouts"], "trials": l["trials"]}},
+            "inference_usd": round(l["tokens"][0] * PRICE_IN + l["tokens"][1] * PRICE_OUT, 2),
+        }
+
+    g = boost.grade(ROOT / "jobs" / CHECKEVAL_JOB)
+    writers = []
+    for key, w in g["writers"].items():
+        model, prompt = WRITER_NAMES[key]
+        writers.append({"model": model, "prompt": prompt, "accepts_correct": r3(w["accepts_correct"]),
+                        "rejects_untouched": r3(w["rejects_untouched"]), "wrong": r3(w["wrong"]),
+                        "usd_per_task": round(w["usd_per_task"], 4), "checks": w["checks"]})
+    th = boost.thresholds(ROOT / "jobs" / CHECKEVAL_JOB, ROOT / "jobs" / LAYER_DEV_JOB)
+    m = boost.misfiled(ROOT / "jobs" / JOB)
+    return {
+        "dev": run(LAYER_DEV_JOB), "heldout": run(LAYER_HELDOUT_JOB),
+        "writers": {"graded": len(g["graded"]), "rows": writers}, "thresholds": th["rows"],
+        "misfiled": {"turns": m["turns"], "misfiled": m["misfiled"], "median_tokens": m["median_tokens"],
+                     "opens_with_answer": m["opens_with_answer"], "normal": m["normal"]},
+    }
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -214,6 +257,7 @@ def main():
         "run": real_run(),
         "validation": validation(),
         "coldstart": cold_start(),
+        "layer": layer(),
     }
     DOCS.mkdir(exist_ok=True)
     (DOCS / "data.js").write_text("window.TALLY = " + json.dumps(data, separators=(",", ":")) + ";\n", encoding="utf-8")
@@ -227,6 +271,12 @@ def main():
           % (c["tasks"], c["frontier"], c["nano"], c["ci"], c["excluded"]))
     print("  validation:", [(v["task"], v["predicted"], v["actual"]) for v in data["validation"]])
     print("  coldstart:", data["coldstart"])
+    L = data["layer"]
+    for half in ("dev", "heldout"):
+        h = L[half]
+        print("  layer %s: %d tasks x %d, stock %.3f -> layer %.3f, diff %+.3f %s, inference $%.2f"
+              % (half, h["tasks"], h["attempts"], h["stock"], h["layer"], h["diff"], h["ci"], h["inference_usd"]))
+    print("  writers:", [(w["model"], w["prompt"], w["accepts_correct"]) for w in L["writers"]["rows"]], "| misfiled:", L["misfiled"])
     print("  headline cell both|0.10|3:", tb["grid"]["both|0.10|3"])
 
 
