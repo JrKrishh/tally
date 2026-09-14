@@ -28,6 +28,35 @@ this with subsampling (100–200× fewer items, same rankings); agent benchmarks
 2–3.5×. The people closest to the problem say rigorous evaluation is now gated to
 well-funded labs.
 
+## What already exists, and what Tally adds
+
+Choosing which items to run from other models' results is not new. For static
+benchmarks, IRT-based subsets estimate full-benchmark scores from about 100 items
+([tinyBenchmarks](https://arxiv.org/abs/2402.14992)) or pick items to match each model
+([Fluid Benchmarking](https://arxiv.org/abs/2509.11106)). For agent benchmarks,
+[Efficient Benchmarking of AI Agents](https://arxiv.org/abs/2603.23749) (March 2026) keeps
+only tasks whose historical pass rate sits between 30% and 70%: on Terminal-Bench 2.0
+(101 agents, 23 scaffolds) and seven HAL benchmarks it drops 44–70% of tasks with rank
+agreement around 0.91, after five to ten agents have been run in full to build the
+history. Tally's task selection (step 3) is the same idea on a smaller history, and
+should be read as that.
+
+What Tally adds sits around the selection, not in it:
+
+- **Tokens per attempt, not tasks, against a no-history baseline.** Step 3 prices every
+  plan in tokens and compares it with simply running fewer attempts. Most of the saving
+  is the attempt cap; history takes off a further 16% among models of one tier.
+- **A real run on a model outside the history.** Nemotron 3 Nano (step 5) shows what a
+  replay among frontier models cannot: filling in "certain" tasks from frontier history
+  would have tripled its score, and for a model that different, history buys nothing.
+  The default plan runs certain tasks once for that reason.
+- **Consistency, per task.** Three attempts per task showed that 12 of the 13 tasks Nano
+  ever solved, it solved only some of the time.
+- **A tool, not an analysis.** `plan` → `run` on Harbor → `report`, with the token and
+  dollar receipt, and a live planner over the replay.
+- **Negative results kept.** The verify-before-done layer (step 6) moved the held-out
+  pass rate by −0.009, and the cross-tier result above is published as found.
+
 ## The data
 
 [Every Eval Ever](https://github.com/evaleval/every_eval_ever) hosts the per-attempt
