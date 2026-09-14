@@ -2,13 +2,16 @@
 
 Step 3 showed which cells are worth running. This turns that into a concrete
 plan for a model nobody has evaluated: the tasks whose difficulty is uncertain
-get run with a capped number of attempts; the rest are imputed from history;
-a handful of the skipped tasks are run once anyway, as a check that the
-imputation was right. The plan is a JSON file that `tally run` executes and
+get run with a capped number of attempts, and the tasks history calls certain
+are run once each (the validate phase), so every task is measured. Step 3's
+replay puts that at 14.7% of Terminal-Bench's tokens, Spearman 0.982, within
+0.004 of running every task twice for 16% fewer tokens. `--validate N` runs
+only N of the certain tasks and imputes the rest from history, the plan the
+first real run used. The plan is a JSON file that `tally run` executes and
 `tally report` scores.
 
   python -m tally.plan --benchmark terminalbench
-  python -m tally.plan --benchmark terminalbench --lo 0.05 --hi 0.95 --attempts 3 --validate 8
+  python -m tally.plan --benchmark terminalbench --lo 0.10 --hi 1.0 --attempts 3 --validate 8
 
 Expected token cost is estimated from the frontier models' attempts on each
 task. A different model will spend differently; the number is a scale, not a
@@ -54,8 +57,9 @@ def main():
     ap.add_argument("--benchmark", default="terminalbench", choices=list(DATASETS))
     ap.add_argument("--lo", type=float, default=0.10)
     ap.add_argument("--hi", type=float, default=0.90)
-    ap.add_argument("--attempts", type=int, default=3)
-    ap.add_argument("--validate", type=int, default=8, help="skipped tasks to run once anyway, as a check")
+    ap.add_argument("--attempts", type=int, default=2, help="attempts per uncertain task")
+    ap.add_argument("--validate", default="all",
+                    help="certain tasks to run once: 'all' measures every one, N runs a sample and imputes the rest")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("-o", "--out")
     args = ap.parse_args()
@@ -72,7 +76,8 @@ def main():
     run = sorted(t for t in diff if args.lo <= diff[t] <= args.hi)
     skipped = sorted(t for t in diff if t not in set(run))
     rng = random.Random(args.seed)
-    validate = sorted(rng.sample(skipped, min(args.validate, len(skipped))))
+    n_validate = len(skipped) if args.validate == "all" else int(args.validate)
+    validate = sorted(rng.sample(skipped, min(n_validate, len(skipped))))
 
     med_all = statistics.median(med.values()) if med else 0.0
     cost_plan = (sum(med[t] for t in run) * args.attempts
@@ -98,9 +103,12 @@ def main():
     print("## plan for a new model on %s  (%s)" % (args.benchmark, DATASETS[args.benchmark]))
     print("  history: %d models, %d tasks with >=3 models' attempts" % (len(models), len(diff)))
     print("  run     : %3d tasks in difficulty [%.2f, %.2f], %d attempts each" % (len(run), args.lo, args.hi, args.attempts))
-    print("  skip    : %3d tasks history calls certain  (%d near-fail, %d near-pass)"
+    print("  certain : %3d tasks history calls certain  (%d near-fail, %d near-pass)"
           % (len(skipped), sum(1 for t in skipped if diff[t] < args.lo), sum(1 for t in skipped if diff[t] > args.hi)))
-    print("  validate: %3d of the skipped, run once as a check: %s" % (len(validate), ", ".join(validate)))
+    if len(validate) == len(skipped):
+        print("  validate: all %d run once, so none is imputed" % len(validate))
+    else:
+        print("  validate: %3d of them run once as a check, the rest imputed: %s" % (len(validate), ", ".join(validate)))
     if no_history:
         print("  no history, run anyway: %s" % ", ".join(no_history))
     print("  expected tokens: plan %.0fM   vs %.0fM for every task at %d attempts   (%.0f%%)"

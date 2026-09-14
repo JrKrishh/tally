@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tally</title>
-<meta name="description" content="Tally ranks coding agents without paying for the whole benchmark: it runs only the cells whose outcome is uncertain and reports the ranking with a receipt. Live planner over 13,915 frontier-model trajectories, plus a real Terminal-Bench 2.0 run of NVIDIA Nemotron 3 Nano on Nebius Token Factory.">
+<meta name="description" content="Tally ranks coding agents without paying for the whole benchmark: it runs the tasks history calls certain once, spends repeat attempts only where the outcome is uncertain, and reports the ranking with a receipt. Live planner over 13,915 frontier-model trajectories, plus a real Terminal-Bench 2.0 run of NVIDIA Nemotron 3 Nano on Nebius Token Factory.">
 <meta property="og:title" content="Tally">
-<meta property="og:description" content="Same ranking, a fraction of the spend, with the receipt. Terminal-Bench 2.0 at 17.7% of the tokens; Nemotron 3 Nano measured for real at 0.079 for $3.92.">
+<meta property="og:description" content="Same ranking, a fraction of the spend, with the receipt. Terminal-Bench 2.0 at 14.7% of the tokens with the ranking intact; Nemotron 3 Nano measured for real at 0.079 for $3.92.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -279,7 +279,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
   <div class="wrap intro">
     <p class="eyebrow">Nebius x NVIDIA Global AI Hackathon · Coding and Agentic Engineering</p>
     <h1>Rank coding agents without paying for the whole benchmark.</h1>
-    <p class="lede">Most cells in an agent benchmark are foregone conclusions, and a benchmark's own history says which. Tally runs only the uncertain ones, caps the attempts, and hands back the ranking with a receipt. Below is its planner replaying 13,915 real frontier-model trajectories, then a real evaluation it ran on NVIDIA Nemotron 3 Nano through Nebius Token Factory.</p>
+    <p class="lede">Most cells in an agent benchmark are foregone conclusions, and a benchmark's own history says which. Tally runs the foregone ones once, saves repeat attempts for the uncertain ones, and hands back the ranking with a receipt. Below is its planner replaying 13,915 real frontier-model trajectories, then a real evaluation it ran on NVIDIA Nemotron 3 Nano through Nebius Token Factory.</p>
     <div class="facts">
       <span>Terminal-Bench 2.0 · 88 tasks</span>
       <span>SWE-bench Pro · 54 tasks</span>
@@ -294,7 +294,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <header>
         <p class="eyebrow">Live planner</p>
         <h2 id="planner-h">Plan an evaluation</h2>
-        <p class="lede">Each of six frontier models is treated as the new model in turn. History from the other five decides which tasks to skip; the rest run with an attempt cap, replayed from that model's real logs. Change the plan and watch what it costs and whether the ranking survives.</p>
+        <p class="lede">Each of six frontier models is treated as the new model in turn. History from the other five decides which tasks are certain; those run once or are skipped, and the rest run with an attempt cap, replayed from that model's real logs over 200 samples. Set history to 100% and nothing is certain: that is the plan that needs no history at all. Change the plan and watch what it costs and whether the ranking survives.</p>
       </header>
 
       <div class="controls" role="group" aria-label="Plan settings">
@@ -306,10 +306,17 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           </div>
         </div>
         <div class="control">
-          <span class="label" id="lb-mode">Skip</span>
+          <span class="label" id="lb-mode">Can be certain</span>
           <div class="seg" data-key="mode" aria-labelledby="lb-mode">
-            <button type="button" data-value="both" aria-pressed="true">Certain passes and fails</button>
-            <button type="button" data-value="fail" aria-pressed="false">Certain fails only</button>
+            <button type="button" data-value="both" aria-pressed="true">Passes and fails</button>
+            <button type="button" data-value="fail" aria-pressed="false">Fails only</button>
+          </div>
+        </div>
+        <div class="control">
+          <span class="label" id="lb-certain">Certain tasks</span>
+          <div class="seg" data-key="certain" aria-labelledby="lb-certain">
+            <button type="button" data-value="once" aria-pressed="true">Run once</button>
+            <button type="button" data-value="skip" aria-pressed="false">Skip</button>
           </div>
         </div>
         <div class="control">
@@ -320,11 +327,11 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           </div>
         </div>
         <div class="control">
-          <span class="label" id="lb-att">Attempts per task</span>
+          <span class="label" id="lb-att">Attempts per uncertain task</span>
           <div class="seg" data-key="attempts" aria-labelledby="lb-att">
             <button type="button" data-value="1" aria-pressed="false">1</button>
-            <button type="button" data-value="2" aria-pressed="false">2</button>
-            <button type="button" data-value="3" aria-pressed="true">3</button>
+            <button type="button" data-value="2" aria-pressed="true">2</button>
+            <button type="button" data-value="3" aria-pressed="false">3</button>
             <button type="button" data-value="5" aria-pressed="false">5</button>
             <button type="button" data-value="all" aria-pressed="false">All logged</button>
           </div>
@@ -334,17 +341,17 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <div class="planner">
         <div class="panel" aria-live="polite">
           <div class="hero-figure">
-            <span class="value" id="p-cost">17.7%</span>
+            <span class="value" id="p-cost">14.7%</span>
             <span class="caption" id="p-cost-cap">of the tokens the full evaluation spent</span>
           </div>
-          <div class="meter" aria-hidden="true"><span id="p-meter" style="width:17.7%"></span></div>
+          <div class="meter" aria-hidden="true"><span id="p-meter" style="width:14.7%"></span></div>
           <div class="meter-scale"><span id="p-tok-plan">0</span><span id="p-tok-full">full run</span></div>
           <div style="margin-top:16px" id="p-status"></div>
           <div class="tiles">
-            <div class="tile"><span class="k">Ranking agreement</span><span class="v" id="p-sp">0.989</span><span class="s">Spearman vs full run</span></div>
-            <div class="tile"><span class="k">Accuracy error</span><span class="v" id="p-mae">0.028</span><span class="s">mean, per model</span></div>
-            <div class="tile"><span class="k">Top model</span><span class="v" id="p-top">5 of 5</span><span class="s" id="p-top-s">samples keep it first</span></div>
-            <div class="tile"><span class="k">Tasks run</span><span class="v" id="p-run">65%</span><span class="s" id="p-run-s">of 86 shared tasks</span></div>
+            <div class="tile"><span class="k">Ranking agreement</span><span class="v" id="p-sp">0.982</span><span class="s">Spearman vs full run</span></div>
+            <div class="tile"><span class="k">Accuracy error</span><span class="v" id="p-mae">0.018</span><span class="s">mean, per model</span></div>
+            <div class="tile"><span class="k">Top model</span><span class="v" id="p-top">98%</span><span class="s" id="p-top-s">of samples keep it first</span></div>
+            <div class="tile"><span class="k">Tasks run</span><span class="v" id="p-run">100%</span><span class="s" id="p-run-s">of 86 shared tasks</span></div>
           </div>
         </div>
 
@@ -364,7 +371,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           </details>
         </div>
       </div>
-      <p class="note" style="margin-top:14px">Replayed on the per-attempt logs of <a href="https://arxiv.org/abs/2606.17930">arXiv 2606.17930</a> from <a href="https://github.com/evaleval/every_eval_ever">Every Eval Ever</a>: one agent scaffold, six models, fixed 10M / 30M token budgets. Sampled attempt caps are averaged over five seeds.</p>
+      <p class="note" style="margin-top:14px">Replayed on the per-attempt logs of <a href="https://arxiv.org/abs/2606.17930">arXiv 2606.17930</a> from <a href="https://github.com/evaleval/every_eval_ever">Every Eval Ever</a>: one agent scaffold, six models, fixed 10M / 30M token budgets. Sampled attempts are averaged over 200 seeds. The honest comparison is a plan with no history at all: running every Terminal-Bench task twice costs 17.5% and keeps the ranking at 0.986, so most of the saving is the attempt cap and history buys the rest. At five seeds, skipping certain tasks with three attempts read 0.989; at 200 it reads 0.973, which is why the default now runs certain tasks once.</p>
     </div>
   </section>
 
@@ -434,7 +441,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <div class="found">
         <div class="panel">
           <h3>History's "certain pass" doesn't transfer down a tier</h3>
-          <p>Before the full run, eight tasks history called certain were run once anyway. Every near-certain fail failed; three of four near-certain passes failed too. The replay could never see this: all six models it learned from are frontier models. So for a model unlike its history, Tally now skips certain fails only.</p>
+          <p>Before the full run, eight tasks history called certain were run once anyway. Every near-certain fail failed; three of four near-certain passes failed too. The replay could never see this: all six models it learned from are frontier models. So Tally now runs every certain task once instead of trusting history for it.</p>
           <div class="scroll" style="overflow-x:auto;margin-top:12px"><table id="validation-table"></table></div>
         </div>
         <div class="panel">
@@ -495,7 +502,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <div class="steps">
         <div class="step">
           <span class="n">1 · plan</span>
-          <p>Reads the benchmark's history and writes which tasks to run for the new model, how many attempts, which to skip, and a few skipped ones to run once as a check.</p>
+          <p>Reads the benchmark's history and writes which tasks are uncertain for the new model and how many attempts they get, and runs every task it calls certain once, so nothing is imputed.</p>
           <pre class="cmd">python -m tally.plan --lo 0.10 --hi 1.0</pre>
         </div>
         <div class="step">

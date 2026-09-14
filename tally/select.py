@@ -2,10 +2,12 @@
 
 Step 2 showed a new model's per-task outcome is predictable from the other
 models' pass rates before its first token. So: for each model in turn, pretend
-it is new, take task difficulty from the other five, run only the tasks whose
-difficulty is uncertain, impute the rest from the prior, and see (a) what
-fraction of the tokens were spent and (b) whether the six-model ranking and
-each model's accuracy survive. Every number is on the tasks all six share.
+it is new, take task difficulty from the other five, give the tasks whose
+difficulty is uncertain their attempts, and either impute the certain ones from
+the prior or run them once, and see (a) what fraction of the tokens were spent
+and (b) whether the six-model ranking and each model's accuracy survive. Every
+number is on the tasks all six share, averaged over SEEDS attempt samples. The
+"every task" rows (window [0, 1]) are the baseline that needs no history at all.
 
   python -m tally.select
 
@@ -26,8 +28,9 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 WINDOWS = [(0.0, 1.0), (0.05, 0.95), (0.1, 0.9), (0.2, 0.8), (0.3, 0.7)]
-ATTEMPTS = [None, 3, 1]        # attempts per run cell: all, capped at 3, single
-SEEDS = 5
+ATTEMPTS = [None, 3, 2, 1]     # attempts per uncertain cell: all, or capped
+CERTAIN = [0, 1]               # attempts per certain cell: 0 imputes the prior, 1 measures it once
+SEEDS = 200                    # at 5 seeds Terminal-Bench's skip+cap-3 row read 0.989; at 200 it reads 0.973
 
 
 def load_attempts(col):
@@ -84,9 +87,10 @@ def full(by, models, common):
     return acc, cost
 
 
-def simulate(by, models, common, lo, hi, k, rng, diff_fn=None):
-    """Each model treated as new in turn. -> estimated accuracy, tokens spent, tasks run.
-    diff_fn(model, task) replaces the history prior, e.g. with a cold-start estimate."""
+def simulate(by, models, common, lo, hi, k, rng, diff_fn=None, k_certain=0):
+    """Each model treated as new in turn. -> estimated accuracy, tokens spent, uncertain tasks.
+    diff_fn(model, task) replaces the history prior, e.g. with a cold-start estimate.
+    k_certain > 0 runs the tasks outside the window that many times instead of imputing them."""
     est, spent, nrun = {}, {}, []
     for m in models:
         others = [o for o in models if o != m]
@@ -98,11 +102,12 @@ def simulate(by, models, common, lo, hi, k, rng, diff_fn=None):
         nrun.append(len(run))
         a, c = 0.0, 0.0
         for t in common:
-            if t in run:
+            if t in run or k_certain:
                 atts = list(by[(m, t)])
                 rng.shuffle(atts)
-                if k:
-                    atts = atts[:k]
+                cap = k if t in run else k_certain
+                if cap:
+                    atts = atts[:cap]
                 a += float(np.mean([p for p, _ in atts]))
                 c += sum(tok for _, tok in atts)
             else:
@@ -127,22 +132,26 @@ def main():
         print("  full ranking:")
         for m in sorted(models, key=lambda m: -acc[m]):
             print("    %-38s acc %.3f   %.1fM tokens" % (m, acc[m], cost[m] / 1e6))
-        print("\n  %-14s %-9s %8s %8s %10s %9s %s" % ("difficulty", "attempts", "tasks", "cost", "spearman", "acc MAE", "top-1 kept"))
+        print("\n  %-14s %-9s %-8s %9s %8s %10s %9s %s" % ("difficulty", "attempts", "certain", "uncertain", "cost", "spearman", "acc MAE", "top-1 kept"))
         for lo, hi in WINDOWS:
-            for k in ATTEMPTS:
-                sp, mae, cf, nr, top = [], [], [], [], []
-                for seed in range(SEEDS if k else 1):
-                    est, spent, n = simulate(by, models, common, lo, hi, k, random.Random(seed))
-                    order_true = sorted(models, key=lambda m: -acc[m])
-                    order_est = sorted(models, key=lambda m: -est[m])
-                    sp.append(spearman([acc[m] for m in models], [est[m] for m in models]))
-                    mae.append(float(np.mean([abs(est[m] - acc[m]) for m in models])))
-                    cf.append(sum(spent.values()) / total)
-                    nr.append(n)
-                    top.append(order_true[0] == order_est[0])
-                print("  [%.2f, %.2f]   %-9s %7.0f%% %7.1f%% %10.3f %9.3f   %s"
-                      % (lo, hi, "all" if k is None else "<=%d" % k, 100.0 * np.mean(nr) / len(common),
-                         100.0 * np.mean(cf), np.mean(sp), np.mean(mae), "%d/%d" % (sum(top), len(top))))
+            for kc in CERTAIN:
+                if kc and (lo, hi) == (0.0, 1.0):
+                    continue                   # every task is already uncertain
+                for k in ATTEMPTS:
+                    sp, mae, cf, nr, top = [], [], [], [], []
+                    for seed in range(SEEDS if (k or kc) else 1):
+                        est, spent, n = simulate(by, models, common, lo, hi, k, random.Random(seed), k_certain=kc)
+                        order_true = sorted(models, key=lambda m: -acc[m])
+                        order_est = sorted(models, key=lambda m: -est[m])
+                        sp.append(spearman([acc[m] for m in models], [est[m] for m in models]))
+                        mae.append(float(np.mean([abs(est[m] - acc[m]) for m in models])))
+                        cf.append(sum(spent.values()) / total)
+                        nr.append(n)
+                        top.append(order_true[0] == order_est[0])
+                    print("  [%.2f, %.2f]   %-9s %-8s %8.0f%% %7.1f%% %10.3f %9.3f   %5.1f%%"
+                          % (lo, hi, "all" if k is None else "<=%d" % k, "run once" if kc else "impute",
+                             100.0 * np.mean(nr) / len(common), 100.0 * np.mean(cf), np.mean(sp), np.mean(mae),
+                             100.0 * np.mean(top)))
 
 
 if __name__ == "__main__":

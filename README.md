@@ -6,8 +6,9 @@
 
 Status: **steps 1–6: the first real evaluation, and one agent layer tested on held-out
 tasks.** The data is validated, the mechanism is measured, the cost figure is earned in
-simulation — **Terminal-Bench at 17.7% of the tokens with the six-model ranking intact**
-— and the product has now run a real evaluation end to end: Harbor drove NVIDIA Nemotron
+simulation against a no-history baseline — **Terminal-Bench at 14.7% of the tokens with
+the six-model ranking intact (Spearman 0.982), most of it from capping attempts** — and
+the product has now run a real evaluation end to end: Harbor drove NVIDIA Nemotron
 3 Nano on Nebius Token Factory through the cells the plan chose, on a Nebius AI Cloud
 VM. **Nemotron 3 Nano scores an estimated 0.079 on Terminal-Bench 2.0 (95% interval
 0.035–0.131), last of five against the frontier models' runs without correctness
@@ -132,39 +133,52 @@ The savings are in choosing which cells to run, not in interrupting runs.
 ## Step 3: what does selection actually save?
 
 AUC is not a dollar figure. So: each model is treated as new in turn, its task
-difficulties come from the other five, only tasks whose difficulty falls inside a
-window are run, the rest are imputed from the prior, and attempts per run cell are
-optionally capped. Cost and the six-model ranking are compared against the full
-evaluation on the tasks all six share; subsampled attempts are averaged over five
-seeds.
+difficulties come from the other five, tasks whose difficulty falls inside a window
+get their attempts, and the rest are either imputed from the prior or run once.
+Attempts per task are optionally capped. Cost and the six-model ranking are compared
+against the full evaluation on the tasks all six share; subsampled attempts are
+averaged over 200 seeds.
 
 The full evaluation is **17.8 billion tokens** on Terminal-Bench (86 tasks) and
 **25.5 billion** on SWE-bench Pro (40 tasks) — the order of magnitude behind the
 $40K–$320K figures above.
 
-| policy | Terminal-Bench cost · Spearman · acc MAE | SWE-bench Pro cost · Spearman · acc MAE |
+| policy | Terminal-Bench cost · Spearman · acc MAE · top-1 kept | SWE-bench Pro cost · Spearman · acc MAE · top-1 kept |
 |---|---|---|
-| full evaluation | 100% · 1.000 · 0.000 | 100% · 1.000 · 0.000 |
-| skip tasks history calls ≥95% certain | **76% · 1.000 · 0.014** | **52% · 1.000 · 0.017** |
-| skip ≥90% certain | 68% · 1.000 · 0.023 | 43% · 0.943 · 0.020 |
-| cap at 3 attempts per cell, run every task | 26% · 1.000 · 0.012 | 8.9% · 0.951 · 0.016 |
-| skip ≥90% certain **and** cap at 3 | **17.7% · 0.989 · 0.028** | 3.6% · 0.886 · 0.028 |
-| skip ≥80% certain and cap at 3 | 13.2% · 0.943 · 0.043 | 2.4% · 0.840 · 0.036 |
+| full evaluation | 100% · 1.000 · 0.000 · 100% | 100% · 1.000 · 0.000 · 100% |
+| skip tasks history calls ≥95% certain, every attempt | 76% · 1.000 · 0.014 · 100% | 52% · 1.000 · 0.017 · 100% |
+| skip ≥90% certain, every attempt | 68% · 1.000 · 0.023 · 100% | 43% · 0.943 · 0.020 · 0% |
+| no history: every task, 3 attempts | 26.2% · 0.990 · 0.012 · 100% | 8.9% · 0.947 · 0.016 · 60% |
+| no history: every task, 2 attempts | 17.5% · 0.986 · 0.016 · 98% | 5.9% · 0.911 · 0.021 · 51% |
+| no history: every task, 1 attempt | 8.8% · 0.973 · 0.023 · 93% | 3.0% · 0.842 · 0.031 · 41% |
+| skip ≥90% certain, 3 attempts on the rest | 17.7% · 0.973 · 0.027 · 100% | **3.6% · 0.921 · 0.027 · 42%** |
+| **run ≥90%-certain tasks once, 2 attempts on the rest** | **14.7% · 0.982 · 0.018 · 98%** | 4.2% · 0.888 · 0.023 · 48% |
+| run ≥90%-certain tasks once, 3 attempts on the rest | 20.5% · 0.987 · 0.015 · 100% | 5.4% · 0.915 · 0.019 · 55% |
 
-Two levers, and they are not equal:
+Three findings, in order of size:
 
-1. **Skipping the cells history calls certain is lossless.** A quarter of Terminal-Bench
-   and half of SWE-bench Pro goes unrun, the ranking is untouched, and every model's
-   accuracy is within 0.017 of the full run.
-2. **Capping attempts is the larger saving, and it is where the trade-off lives.** The
-   source study ran 10–15 attempts per cell because it was measuring inference-scaling
-   curves; three per cell recovers the ranking at 26% and 9% of the cost. Combined with
-   skipping, **Terminal-Bench evaluates at 17.7% of its tokens with Spearman 0.989 and
-   the top model preserved in all five seeds — 5.6× cheaper.**
+1. **Capping attempts is the saving, and it needs no history.** The source study ran
+   10–15 attempts per cell because it was measuring inference-scaling curves. Two
+   attempts per task, with no history at all, keep Terminal-Bench's ranking at Spearman
+   0.986 for 17.5% of the tokens.
+2. **Skipping what history calls certain is nearly free when every attempt is kept, and
+   it is where the error comes from under a cap.** A skipped task costs nothing and is
+   wrong by the gap between this model and the average of the others. At three
+   attempts on Terminal-Bench that more than doubles the accuracy error (0.012 → 0.027)
+   and drops the ranking below the plan that uses no history.
+3. **History's job is allocation, not imputation.** Run the certain tasks once and save
+   repeat attempts for the uncertain ones: **Terminal-Bench at 14.7% of its tokens,
+   Spearman 0.982, the top model kept in 98% of samples** — 6.8× cheaper than the
+   study's budget, and 16% cheaper than running every task twice at nearly the same
+   fidelity. On SWE-bench Pro, where attempts are long and tasks few, skipping still
+   pays: 3.6% of the tokens for 0.921, against 0.842 for one attempt per task at 3.0%.
 
-Against which baseline, honestly: 5.6× is against the study's own budget. Against a
-sensible three-attempt default, task selection alone buys a further 1.5× on
-Terminal-Bench and is not worth it on SWE-bench Pro at 40 tasks.
+**Against which baseline, honestly.** The first version of this table reported "skip
+≥90% certain and cap at 3" as **17.7% · 0.989**. That was the mean of five attempt
+samples; over 200 it is 0.973, and running every task twice with no history beats it at
+the same cost. That comparison is the test the result has to pass, so it is in the
+table, and `tally plan` now runs every certain task once by default. Most of the saving
+on Terminal-Bench is the attempt cap; history buys the last 16%.
 
 **The SWE-bench Pro caveat.** Its top two models score 0.810 and 0.805 — a gap of one
 task in two hundred, inside the 12% per-attempt flip rate. No policy resolves that
@@ -199,16 +213,16 @@ The correlation is not what matters. The policy is:
 
 | step-3 policy — skip outside [0.1, 0.9], cap 3 — prior from | Terminal-Bench cost · Spearman · MAE | SWE-bench Pro cost · Spearman · MAE |
 |---|---|---|
-| history (the other five models) | 17.7% · 0.989 · 0.028 | 3.6% · 0.886 · 0.028 |
-| **Nemotron reading the task, no history** | 23.8% · 0.943 · 0.014 | 8.5% · 0.911 · 0.021 |
-| no prior at all (cap 3, run every task) | 26.4% · 1.000 · 0.012 | 8.9% · 0.951 · 0.016 |
+| history (the other five models) | 17.7% · 0.973 · 0.027 | 3.6% · 0.921 · 0.027 |
+| **Nemotron reading the task, no history** | 23.8% · 0.972 · 0.015 | 8.3% · 0.883 · 0.028 |
+| no prior at all (cap 3, run every task) | 26.2% · 0.990 · 0.012 | 8.9% · 0.947 · 0.016 |
 
-Read against the right row: **most of the cold-start saving is the attempt cap.** The
-model's read of the task buys a further ~10% on Terminal-Bench at a small fidelity
-cost, and nothing on SWE-bench Pro. History is 1.3–2.4× cheaper still, because it
-skips with confidence. The Nemotron row's higher Spearman on SWE-bench Pro is not a
-win over history — it runs twice as many tasks, which is a cost-fidelity trade, not
-a better prior.
+This table holds the skip-and-impute policy fixed so the priors can be compared; step 3
+shows that running certain tasks once beats skipping them. Read against the right row:
+**most of the cold-start saving is the attempt cap.** The model's read of the task buys
+a further ~9% on Terminal-Bench at a small fidelity cost, and on SWE-bench Pro a 7%
+saving that costs more fidelity than it is worth, as the failed kill criterion
+predicts. History is 1.3–2.3× cheaper still, because it skips with confidence.
 
 What the weak prior does have is the property worth keeping: **it fails safe.**
 Uncertain estimates land inside the window and the task runs. The harness degrades
@@ -263,7 +277,9 @@ near-pass tasks imputed at ~0.95 against a real rate nearer one in four.
 That is the whole reason the validate phase exists, and it changes the product: for a
 model of unknown tier, **skip only on the fail side** (`plan --hi 1.0`). The pass side
 runs until the model has earned its own history. Ten tasks skipped instead of thirty-one;
-the saving is smaller and the estimate is honest.
+the saving is smaller and the estimate is honest. Step 3's 200-sample replay later reached
+the same place from inside the frontier tier: imputing certain tasks costs accuracy even
+there, so `plan` now runs every certain task once by default and imputes nothing.
 
 ### The full run
 
@@ -413,7 +429,7 @@ python -m tally.select                       # step 3: the policy table
 python -m tally.coldstart extract            # step 4: task text + true difficulty
 NEBIUS_API_KEY=... python -m tally.coldstart score   # step 4: Nemotron on Token Factory, resumable
 python -m tally.coldstart report             # step 4: re-analyse scores on disk, spends nothing
-python -m tally.plan --lo 0.10 --hi 1.0      # step 5: cells to run for a new model, skipping only the fail side
+python -m tally.plan --lo 0.10 --hi 1.0 --attempts 3 --validate 8   # step 5: the plan the real run used (the default runs every certain task once)
 python -m tally.run --plan data/plan_terminalbench.json --phase validate -n 4   # step 5: check the skipped cells (Docker + NEBIUS_API_KEY)
 python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4        # step 5: the real evaluation
 python -m tally.report --plan data/plan_terminalbench.json                      # step 5: accuracy, rank, receipt, validation

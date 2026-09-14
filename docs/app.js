@@ -65,13 +65,13 @@
   }
 
   // ------------------------------------------------------------------ planner
-  var state = { bench: "terminalbench", mode: "both", certainty: 90, attempts: "3" };
+  var state = { bench: "terminalbench", mode: "both", certainty: 90, attempts: "2", certain: "once" };
   var certainty = document.getElementById("certainty");
   var certaintyOut = document.getElementById("certainty-out");
 
   function cell() {
     var t = ((100 - state.certainty) / 100).toFixed(2);
-    return D.planner[state.bench].grid[state.mode + "|" + t + "|" + state.attempts];
+    return D.planner[state.bench].grid[state.mode + "|" + t + "|" + state.attempts + "|" + state.certain];
   }
 
   function renderTiles(c, P) {
@@ -83,14 +83,16 @@
     document.getElementById("p-tok-full").textContent = billions(P.tokens_full) + " full run";
     document.getElementById("p-sp").textContent = f3(c.spearman);
     document.getElementById("p-mae").textContent = f3(c.mae);
-    document.getElementById("p-top").textContent = c.top1[0] + " of " + c.top1[1];
-    document.getElementById("p-top-s").textContent = (c.top1[1] === 1 ? "run keeps " : "samples keep ") + topFull + " first";
+    var topShare = c.top1[0] / c.top1[1];
+    document.getElementById("p-top").textContent = Math.round(topShare * 100) + "%";
+    document.getElementById("p-top-s").textContent = (c.top1[1] === 1 ? "the run keeps " : "of " + c.top1[1] + " samples keep ") + topFull + " first";
     document.getElementById("p-run").textContent = Math.round(c.tasks_run * 100) + "%";
-    document.getElementById("p-run-s").textContent = "of " + P.tasks + " shared tasks";
+    document.getElementById("p-run-s").textContent = "of " + P.tasks + " shared tasks" +
+      (state.certain === "once" && c.uncertain < 1 ? "; " + Math.round((1 - c.uncertain) * P.tasks) + " certain ones once" : "");
 
     var st = document.getElementById("p-status");
     clear(st);
-    var intact = c.spearman >= 0.95 && c.top1[0] === c.top1[1];
+    var intact = c.spearman >= 0.95 && topShare >= 0.95;
     var pill = html("span", { class: "pill " + (intact ? "good" : "warn") }, st);
     pill.appendChild(icon(intact ? "ok" : "warn"));
     html("span", {}, pill, intact ? "Ranking intact" : c.spearman >= 0.85 ? "Ranking mostly holds" : "Ranking shifts");
@@ -158,7 +160,7 @@
 
   function renderPlanner() {
     var P = D.planner[state.bench], c = cell();
-    certaintyOut.textContent = state.certainty === 100 ? "never skip" : state.certainty + "% sure";
+    certaintyOut.textContent = state.certainty === 100 ? "nothing is certain" : state.certainty + "% sure";
     renderTiles(c, P);
     renderDumbbell(c, P);
   }

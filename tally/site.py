@@ -44,28 +44,35 @@ def planner(col):
     by, models, common = select.cells(select.load_attempts(col))
     acc, cost = select.full(by, models, common)
     total = sum(cost.values())
+    # a model's history prior does not change across replays, so compute it once
+    prior = dict((m, dict((t, float(np.mean([np.mean([p for p, _ in by[(o, t)]]) for o in models if o != m])))
+                          for t in common)) for m in models)
     grid = {}
     for mode in ("both", "fail"):
         for t in THRESHOLDS:
             lo, hi = t, (1.0 - t if mode == "both" else 1.0)
-            for k in ATTEMPTS:
-                seeds = select.SEEDS if k else 1
-                est_sum = collections.defaultdict(float)
-                cf = sp = mae = top = nrun = 0.0
-                for seed in range(seeds):
-                    est, spent, n = select.simulate(by, models, common, lo, hi, k, random.Random(seed))
-                    for m in models:
-                        est_sum[m] += est[m]
-                    cf += sum(spent.values()) / total
-                    sp += select.spearman([acc[m] for m in models], [est[m] for m in models])
-                    mae += float(np.mean([abs(est[m] - acc[m]) for m in models]))
-                    top += max(models, key=lambda m: acc[m]) == max(models, key=lambda m: est[m])
-                    nrun += n
-                grid["%s|%.2f|%s" % (mode, t, k or "all")] = {
-                    "cost": round(cf / seeds, 4), "spearman": round(sp / seeds, 3), "mae": round(mae / seeds, 3),
-                    "top1": [int(top), seeds], "tasks_run": round(nrun / seeds / len(common), 3),
-                    "est": dict((NAMES[m], round(est_sum[m] / seeds, 3)) for m in models),
-                }
+            for kc in select.CERTAIN:
+                for k in ATTEMPTS:
+                    seeds = select.SEEDS if (k or kc) else 1
+                    est_sum = collections.defaultdict(float)
+                    cf = sp = mae = top = nrun = 0.0
+                    for seed in range(seeds):
+                        est, spent, n = select.simulate(by, models, common, lo, hi, k, random.Random(seed),
+                                                        diff_fn=lambda m, t: prior[m][t], k_certain=kc)
+                        for m in models:
+                            est_sum[m] += est[m]
+                        cf += sum(spent.values()) / total
+                        sp += select.spearman([acc[m] for m in models], [est[m] for m in models])
+                        mae += float(np.mean([abs(est[m] - acc[m]) for m in models]))
+                        top += max(models, key=lambda m: acc[m]) == max(models, key=lambda m: est[m])
+                        nrun += n
+                    uncertain = nrun / seeds / len(common)
+                    grid["%s|%.2f|%s|%s" % (mode, t, k or "all", "once" if kc else "skip")] = {
+                        "cost": round(cf / seeds, 5), "spearman": round(sp / seeds, 3), "mae": round(mae / seeds, 3),
+                        "top1": [int(top), seeds], "uncertain": round(uncertain, 3),
+                        "tasks_run": 1.0 if kc else round(uncertain, 3),
+                        "est": dict((NAMES[m], round(est_sum[m] / seeds, 3)) for m in models),
+                    }
         print("  %s %s: %d cells" % (col, mode, len(grid)))
     return {
         "tasks": len(common), "tokens_full": total,
@@ -277,7 +284,10 @@ def main():
         print("  layer %s: %d tasks x %d, stock %.3f -> layer %.3f, diff %+.3f %s, inference $%.2f"
               % (half, h["tasks"], h["attempts"], h["stock"], h["layer"], h["diff"], h["ci"], h["inference_usd"]))
     print("  writers:", [(w["model"], w["prompt"], w["accepts_correct"]) for w in L["writers"]["rows"]], "| misfiled:", L["misfiled"])
-    print("  headline cell both|0.10|3:", tb["grid"]["both|0.10|3"])
+    for key in ("both|0.10|3|skip", "both|0.10|2|once", "both|0.00|2|skip"):
+        c = tb["grid"][key]
+        print("  TB cell %-18s cost %.3f  spearman %.3f  mae %.3f  top-1 %d/%d"
+              % (key, c["cost"], c["spearman"], c["mae"], c["top1"][0], c["top1"][1]))
 
 
 if __name__ == "__main__":
