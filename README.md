@@ -44,6 +44,16 @@ agreement around 0.91, after five to ten agents have been run in full to build t
 history. Tally's task selection (step 3) is the same idea on a smaller history, and
 should be read as that.
 
+The closest work runs on Tally's own harness. [Harbor Adapters and
+Harbor-Index](https://arxiv.org/abs/2609.04298) (September 2026) ports more than 80
+benchmarks to Harbor and evaluates 8 models on 54 of them: 6,627 tasks, three trials per
+model and harness, more than $300K of compute. From that run it curates Harbor-Index, 82
+hard tasks across 29 benchmarks that stay affordable to run and on which no configuration
+passes more than 30%, and it measures redundancy directly: 3 representative tasks per
+benchmark recover the system ranking at a mean Spearman of 0.923. Harbor-Index is built
+to stay hard; Tally estimates a model's score on the whole benchmark, so it keeps every
+task and caps attempts instead.
+
 What Tally adds sits around the selection, not in it:
 
 - **Tokens per attempt, not tasks, against a no-history baseline.** Step 3 prices every
