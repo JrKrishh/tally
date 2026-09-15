@@ -66,7 +66,7 @@ def find_jobs(jobs_dir, prefix, include_dry=False):
     dirs = [p for p in Path(jobs_dir).glob(prefix + "*") if p.is_dir()]
     if not include_dry:
         dirs = [p for p in dirs if not p.name.endswith("-dry")]
-    return sorted(dirs, key=lambda p: p.stat().st_mtime)
+    return sorted(dirs, key=lambda p: p.name)          # by the name's timestamp: a pull resets mtimes
 
 
 def load_job(jobs_dir, prefix):

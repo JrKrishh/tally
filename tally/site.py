@@ -25,6 +25,8 @@ VALIDATE_PREFIX = "tally-terminalbench-validate-nvidia-NVIDIA-Nemotron-3-Nano-30
 LAYER_DEV_JOB = "tally-terminalbench-dev-CheckedTerminus-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-143224"
 LAYER_HELDOUT_JOB = "tally-terminalbench-heldout-CheckedTerminus-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-154405"
 CHECKEVAL_JOB = "tally-terminalbench-dev-CheckEval-nvidia-NVIDIA-Nemotron-3-Nano-30B-A3B-20260913-181951"
+LIGHTNING_JOBS = ["tally-terminalbench-validate-nvidia-Nemotron-3-5-Lightning-20260914-174213",
+                  "tally-terminalbench-run-nvidia-Nemotron-3-5-Lightning-20260914-183528"]
 WRITER_NAMES = {"nano-v1": ("Nemotron 3 Nano 30B", "original"), "nano": ("Nemotron 3 Nano 30B", "stricter"),
                 "super": ("Nemotron 3 Super 120B", "stricter"), "ultra": ("Nemotron 3 Ultra 550B", "stricter")}
 THRESHOLDS = [0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
@@ -182,6 +184,49 @@ def real_run():
     }
 
 
+def lightning():
+    """The second real evaluation: Nemotron 3.5 Lightning on the default plan (certain tasks once,
+    uncertain twice), so every task is measured and nothing is imputed."""
+    rows = [r for job in LIGHTNING_JOBS for r in trial_rows(ROOT / "jobs" / job)]
+    by = collections.defaultdict(list)
+    for r in rows:
+        by[r["task"]].append(r)
+    plan = json.load(open(DATA.parent / "plan_terminalbench_lightning.json"))
+    prior = plan["skipped_prior"]
+    tasks = sorted(set(plan["tasks_run"]) | set(prior) | set(plan["tasks_no_history"]))
+    est, ci = estimate(by, {}, tasks)
+    rate = lambda t: float(np.mean([1.0 if a["outcome"] == "pass" else 0.0 for a in by[t]]))
+    imputed = float(np.mean([prior[t] if t in prior else rate(t) for t in tasks]))
+    _, ref_tasks, _ = select.nofeedback_reference("terminalbench")
+    cmp_est, cmp_ci = estimate(by, {}, ref_tasks)
+    uncertain = [t for t in plan["tasks_run"] + plan["tasks_no_history"] if len(by[t]) == plan["attempts"]]
+    wins = collections.Counter(sum(a["outcome"] == "pass" for a in by[t]) for t in uncertain)
+    side = lambda keep, want: [sum(1 for t in prior if keep(prior[t]) and (rate(t) >= 1.0) == want),
+                               sum(1 for t in prior if keep(prior[t]))]
+    stats = [json.load(open(ROOT / "jobs" / job / "result.json")).get("stats", {}) for job in LIGHTNING_JOBS]
+    tin, tout = sum(s["n_input_tokens"] for s in stats), sum(s["n_output_tokens"] for s in stats)
+    parse = lambda s: datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    start, end = min(parse(r["started"]) for r in rows), max(parse(r["finished"]) for r in rows)  # one sitting
+    hours = (end - start).total_seconds() / 3600
+    return {
+        "model": "Nemotron 3.5 Lightning", "model_id": "nvidia/Nemotron-3_5-Lightning",
+        "estimate": round(est, 3), "ci": ci, "imputed": round(imputed, 3),
+        "tasks_all": len(tasks), "trials": len(rows), "passes": sum(r["outcome"] == "pass" for r in rows),
+        "timeouts": sum(r["outcome"] == "timeout" for r in rows),
+        "solved": sum(1 for t in tasks if any(a["outcome"] == "pass" for a in by[t])),
+        "uncertain": {"tasks": len(uncertain), "both": wins[2], "one": wins[1], "neither": wins[0]},
+        "certain": {"fail_held": side(lambda p: p < 0.5, False), "pass_held": side(lambda p: p >= 0.5, True)},
+        "compare": {"tasks": len(ref_tasks), "estimate": round(cmp_est, 3), "ci": cmp_ci},
+        "steps_median": int(np.median([r["steps"] for r in rows])),
+        "turn_cap": [sum(1 for r in rows if r["steps"] > 60), len(rows)],
+        "receipt": {"tokens_in": tin, "tokens_out": tout, "tokens_cached": sum(s["n_cache_tokens"] for s in stats),
+                    "price_in_per_m": PRICE_IN * 1e6, "price_out_per_m": PRICE_OUT * 1e6,
+                    "inference_usd": round(tin * PRICE_IN + tout * PRICE_OUT, 2),
+                    "vm_hours": round(hours, 1), "vm_per_hour": VM_PER_HOUR, "vm_usd": round(hours * VM_PER_HOUR, 2),
+                    "sittings": [[start.strftime("%H:%M"), end.strftime("%H:%M")]]},
+    }
+
+
 def validation():
     jobs = sorted((ROOT / "jobs").glob(VALIDATE_PREFIX + "*"), key=lambda p: p.stat().st_mtime)
     jobs = [j for j in jobs if not j.name.endswith("-dry")]
@@ -262,6 +307,7 @@ def main():
     data = {
         "planner": {"terminalbench": tb, "swebenchpro": swe, "thresholds": THRESHOLDS, "attempts": [a or "all" for a in ATTEMPTS]},
         "run": real_run(),
+        "lightning": lightning(),
         "validation": validation(),
         "coldstart": cold_start(),
         "layer": layer(),
@@ -276,6 +322,12 @@ def main():
     c = r["compare"]
     print("  like for like, %d tasks, no feedback: %s | Nano %.3f %s | excluded %s"
           % (c["tasks"], c["frontier"], c["nano"], c["ci"], c["excluded"]))
+    g = data["lightning"]
+    print("  lightning: estimate %.3f %s (imputing certain tasks: %.3f), %d trials, %d passes, %d tasks solved, like for like %.3f %s,"
+          " certain fail side %s pass side %s, uncertain %s, turn cap %s, $%.2f + VM $%.2f (%.1f h)"
+          % (g["estimate"], g["ci"], g["imputed"], g["trials"], g["passes"], g["solved"], g["compare"]["estimate"], g["compare"]["ci"],
+             g["certain"]["fail_held"], g["certain"]["pass_held"], g["uncertain"], g["turn_cap"],
+             g["receipt"]["inference_usd"], g["receipt"]["vm_usd"], g["receipt"]["vm_hours"]))
     print("  validation:", [(v["task"], v["predicted"], v["actual"]) for v in data["validation"]])
     print("  coldstart:", data["coldstart"])
     L = data["layer"]

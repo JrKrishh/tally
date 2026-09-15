@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tally</title>
-<meta name="description" content="Tally ranks coding agents without paying for the whole benchmark: it runs the tasks history calls certain once, spends repeat attempts only where the outcome is uncertain, and reports the ranking with a receipt. Live planner over 13,915 frontier-model trajectories, plus a real Terminal-Bench 2.0 run of NVIDIA Nemotron 3 Nano on Nebius Token Factory.">
+<meta name="description" content="Tally ranks coding agents without paying for the whole benchmark: it runs the tasks history calls certain once, spends repeat attempts only where the outcome is uncertain, and reports the ranking with a receipt. Live planner over 13,915 frontier-model trajectories, plus real Terminal-Bench 2.0 runs of NVIDIA Nemotron 3 Nano and Nemotron 3.5 Lightning on Nebius Token Factory.">
 <meta property="og:title" content="Tally">
-<meta property="og:description" content="Same ranking, a fraction of the spend, with the receipt. Terminal-Bench 2.0 at 14.7% of the tokens with the ranking intact; Nemotron 3 Nano measured for real at 0.079 for $3.92.">
+<meta property="og:description" content="Same ranking, a fraction of the spend, with the receipt. Terminal-Bench 2.0 at 14.7% of the tokens with the ranking intact; Nemotron 3 Nano measured for real at 0.079 for $3.92, Nemotron 3.5 Lightning at 0.174 for $10.57.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -197,6 +197,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .stat-big .v { font: 600 44px/1 var(--sans); letter-spacing: -0.01em; }
 .stat-big .k { color: var(--ink-2); font-size: 15px; margin-top: 8px; }
 .grid-foot { font: 400 12px/1.4 var(--mono); color: var(--muted); margin-top: 8px; }
+.receipt-col { display: grid; gap: 14px; min-width: 0; }
 
 /* the receipt */
 .receipt {
@@ -267,7 +268,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
     <a class="brand" href="#">Tally <small>cost-aware agent evals</small></a>
     <nav aria-label="Sections">
       <a href="#planner">Planner</a>
-      <a href="#run">Real run</a>
+      <a href="#run">Real runs</a>
       <a href="#layer">Experiment</a>
       <a href="#how">How it works</a>
       <a href="https://github.com/JrKrishh/tally">GitHub</a>
@@ -279,12 +280,12 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
   <div class="wrap intro">
     <p class="eyebrow">Nebius x NVIDIA Global AI Hackathon · Coding and Agentic Engineering</p>
     <h1>Rank coding agents without paying for the whole benchmark.</h1>
-    <p class="lede">Most cells in an agent benchmark are foregone conclusions, and a benchmark's own history says which. Tally runs the foregone ones once, saves repeat attempts for the uncertain ones, and hands back the ranking with a receipt. Below is its planner replaying 13,915 real frontier-model trajectories, then a real evaluation it ran on NVIDIA Nemotron 3 Nano through Nebius Token Factory.</p>
+    <p class="lede">Most cells in an agent benchmark are foregone conclusions, and a benchmark's own history says which. Tally runs the foregone ones once, saves repeat attempts for the uncertain ones, and hands back the ranking with a receipt. Below is its planner replaying 13,915 real frontier-model trajectories, then real evaluations it ran on NVIDIA Nemotron 3 Nano and Nemotron 3.5 Lightning through Nebius Token Factory.</p>
     <div class="facts">
       <span>Terminal-Bench 2.0 · 88 tasks</span>
       <span>SWE-bench Pro · 54 tasks</span>
       <span>6 frontier models of history</span>
-      <span>1 model run for real</span>
+      <span>2 models run for real</span>
       <span>1 agent layer tested on held-out tasks</span>
     </div>
   </div>
@@ -379,8 +380,8 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
     <div class="wrap">
       <header>
         <p class="eyebrow">Run for real</p>
-        <h2 id="run-h">Then it evaluated a model nobody had</h2>
-        <p class="lede">Nemotron 3 Nano 30B is not in the study. Tally planned its Terminal-Bench 2.0 evaluation from the six frontier models' history, skipped the ten tasks every one of them failed, and ran the other 79 three times each: the model served by Nebius Token Factory, every trial in its own Docker sandbox on a Nebius AI Cloud VM.</p>
+        <h2 id="run-h">Then it evaluated models nobody had</h2>
+        <p class="lede">Nemotron 3 Nano 30B is not in the study. Tally planned its Terminal-Bench 2.0 evaluation from the six frontier models' history, skipped the ten tasks every one of them failed, and ran the other 79 three times each: the model served by Nebius Token Factory, every trial in its own Docker sandbox on a Nebius AI Cloud VM. Nemotron 3.5 Lightning then ran on the default plan, every certain task once and every uncertain one twice: 147 trials, nothing imputed, 0.174 (0.101–0.253) across all 89 tasks.</p>
       </header>
 
       <div class="run-grid">
@@ -389,7 +390,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
             <div class="chart-head">
               <h3>Terminal-Bench 2.0 accuracy, like for like</h3>
               <div class="legend" aria-hidden="true">
-                <span><i class="sq" style="background:var(--accent)"></i>Nemotron 3 Nano, this run (95% interval)</span>
+                <span><i class="sq" style="background:var(--accent)"></i>Nemotron runs on Nebius (95% interval)</span>
                 <span><i class="sq" style="background:var(--deemph)"></i>Frontier models, runs without feedback</span>
               </div>
             </div>
@@ -398,19 +399,19 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
               <summary>Show as table</summary>
               <div class="scroll"><table id="ranking-table"></table></div>
             </details>
-            <p class="note" style="margin-top:10px" id="compare-note">Every model is scored on the same tasks, using only frontier attempts where the agent was not told whether it was right; half the study's attempts had that oracle feedback, which roughly doubles the weaker models. Budgets still differ: the frontier models ran with 10M-token trajectories, Nemotron Nano with 60 turns, and the stock agent discarded 18% of Nano's turns because the answer came back in the reasoning field.</p>
+            <p class="note" style="margin-top:10px" id="compare-note">Every model is scored on the same tasks, using only frontier attempts where the agent was not told whether it was right; half the study's attempts had that oracle feedback, which roughly doubles the weaker models. Budgets still differ: the frontier models ran with 10M-token trajectories, the Nemotron runs with 60 turns, and the stock agent discarded 18% of Nano's turns because the answer came back in the reasoning field.</p>
           </div>
 
           <div class="panel">
             <div class="split">
               <div class="stat-big">
                 <div class="v" id="flaky">12 of 13</div>
-                <div class="k">tasks it ever solved, it solved only some of the time.</div>
+                <div class="k">tasks Nano ever solved, it solved only some of the time.</div>
                 <p class="note" style="margin-top:12px">A single-run leaderboard lists those as things the model can do. Three attempts show a model that sometimes does.</p>
               </div>
               <div>
                 <div class="chart-head">
-                  <h3>Every task it solved, attempt by attempt</h3>
+                  <h3>Every task Nano solved, attempt by attempt</h3>
                   <div class="legend" aria-hidden="true">
                     <span><i class="sq" style="background:var(--accent)"></i>Pass</span>
                     <span><i class="sq" style="background:var(--cell-fail)"></i>Fail</span>
@@ -427,7 +428,16 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           </div>
         </div>
 
-        <aside class="receipt" id="receipt" aria-label="Receipt for the Nemotron 3 Nano evaluation"></aside>
+        <div class="receipt-col">
+          <div class="control">
+            <span class="label" id="lb-receipt">Receipt for</span>
+            <div class="seg" data-key="receipt" aria-labelledby="lb-receipt">
+              <button type="button" data-value="nano" aria-pressed="true">Nemotron 3 Nano</button>
+              <button type="button" data-value="lightning" aria-pressed="false">3.5 Lightning</button>
+            </div>
+          </div>
+          <aside class="receipt" id="receipt" aria-label="Evaluation receipt"></aside>
+        </div>
       </div>
     </div>
   </section>
@@ -441,7 +451,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
       <div class="found">
         <div class="panel">
           <h3>History's "certain pass" doesn't transfer down a tier</h3>
-          <p>Before the full run, eight tasks history called certain were run once anyway. Every near-certain fail failed; three of four near-certain passes failed too. The replay could never see this: all six models it learned from are frontier models. So Tally now runs every certain task once instead of trusting history for it.</p>
+          <p>Before the full run, eight tasks history called certain were run once anyway. Every near-certain fail failed; three of four near-certain passes failed too. The replay could never see this: all six models it learned from are frontier models. So Tally now runs every certain task once instead of trusting history for it. Nemotron 3.5 Lightning, run that way, showed why: all 10 certain fails failed, but only 10 of 21 certain passes passed. Trusting history would have reported 0.288; measured, it is 0.174.</p>
           <div class="scroll" style="overflow-x:auto;margin-top:12px"><table id="validation-table"></table></div>
         </div>
         <div class="panel">
@@ -503,7 +513,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
         <div class="step">
           <span class="n">1 · plan</span>
           <p>Reads the benchmark's history and writes which tasks are uncertain for the new model and how many attempts they get, and runs every task it calls certain once, so nothing is imputed.</p>
-          <pre class="cmd">python -m tally.plan --lo 0.10 --hi 1.0</pre>
+          <pre class="cmd">python -m tally.plan</pre>
         </div>
         <div class="step">
           <span class="n">2 · run</span>
@@ -512,13 +522,13 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
         </div>
         <div class="step">
           <span class="n">3 · report</span>
-          <p>Measured where it ran, history where it skipped: accuracy, rank among the models history knows, the token and dollar receipt, and whether the skipped cells behaved as predicted.</p>
+          <p>Measured wherever it ran, which under the default plan is every task: accuracy, rank among the models history knows, the token and dollar receipt, and whether the tasks history called certain came out as predicted.</p>
           <pre class="cmd">python -m tally.report --plan data/plan_terminalbench.json</pre>
         </div>
       </div>
       <div class="stackline">
         <div><b>Nebius Token Factory</b>serves Nemotron to the agent; prices the receipt</div>
-        <div><b>NVIDIA Nemotron 3</b>Nano as the agent, Super as the cold-start reader, Super and Ultra graded as check writers</div>
+        <div><b>NVIDIA Nemotron</b>3 Nano and 3.5 Lightning as agents, Super as the cold-start reader, Super and Ultra graded as check writers</div>
         <div><b>Nebius AI Cloud</b>cpu-d3 VM running the Docker sandboxes</div>
         <div><b>Harbor + Terminus-2</b>the Terminal-Bench 2.0 harness and agent</div>
         <div><b>Every Eval Ever</b>13,915 frontier-model trajectories as history</div>
@@ -535,7 +545,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           <li>One agent scaffold. Scaffold choice moves cost up to 33× on identical tasks, so rankings should transfer; absolute numbers will not.</li>
           <li>History is six models of one tier. The validation run shows what that costs for a weaker model.</li>
           <li>SWE-bench Pro here is a 54-task subset with 40 tasks shared by all six models.</li>
-          <li>The frontier logs used generous 10M / 30M token budgets; the Nemotron run used far tighter ones.</li>
+          <li>The frontier logs used generous 10M / 30M token budgets; the Nemotron runs used 60 turns. Lightning hit that cap in 59 of 147 trials, so its score is a floor under that budget.</li>
           <li>The layer experiment is one design on one small model. A model that repairs better might gain from the same checks.</li>
         </ul>
       </div>

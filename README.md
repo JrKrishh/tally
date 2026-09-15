@@ -2,9 +2,9 @@
 
 **Cost-aware evaluation for coding agents. Same ranking, a fraction of the spend, with the receipt.**
 
-**Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, the Nemotron run's results and receipt, and the layer experiment.
+**Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, both Nemotron runs' results and receipts, and the layer experiment.
 
-Status: **steps 1–6: the first real evaluation, and one agent layer tested on held-out
+Status: **steps 1–6: two real evaluations, and one agent layer tested on held-out
 tasks.** The data is validated, the mechanism is measured, the cost figure is earned in
 simulation against a no-history baseline — **Terminal-Bench at 14.7% of the tokens with
 the six-model ranking intact (Spearman 0.982), most of it from capping attempts** — and
@@ -14,8 +14,11 @@ VM. **Nemotron 3 Nano scores an estimated 0.079 on Terminal-Bench 2.0 (95% inter
 0.035–0.131), last of five against the frontier models' runs without correctness
 feedback on the same tasks** — every planned task attempted three times, 237 verdicts,
 $3.92 of inference, and a data point nobody had. Of the 13 tasks it ever solved, it
-solved 12 only some of the time (step 5). **A verify-before-done layer around the agent
-does not lift it:** tuned on 40 tasks and run once on 39 held-out tasks, it changed the
+solved 12 only some of the time (step 5). **A second model, Nemotron 3.5 Lightning, ran on
+the default plan** — every certain task once, every uncertain one twice, 147 trials, nothing
+imputed — and scores 0.174 (0.101–0.253) for $10.57; trusting history for its certain
+tasks would have reported 0.288. **A verify-before-done layer around the agent
+does not lift Nano:** tuned on 40 tasks and run once on 39 held-out tasks, it changed the
 pass rate by −0.009 (95% interval −0.051 to +0.034) at 1.8× the cost per trial (step 6).
 
 ## The problem
@@ -46,10 +49,12 @@ What Tally adds sits around the selection, not in it:
 - **Tokens per attempt, not tasks, against a no-history baseline.** Step 3 prices every
   plan in tokens and compares it with simply running fewer attempts. Most of the saving
   is the attempt cap; history takes off a further 16% among models of one tier.
-- **A real run on a model outside the history.** Nemotron 3 Nano (step 5) shows what a
+- **Real runs on models outside the history.** Nemotron 3 Nano (step 5) shows what a
   replay among frontier models cannot: filling in "certain" tasks from frontier history
   would have tripled its score, and for a model that different, history buys nothing.
-  The default plan runs certain tasks once for that reason.
+  The default plan runs certain tasks once for that reason, and Nemotron 3.5 Lightning,
+  run on it, shows why: 10 of its 21 "certain passes" passed, and imputing them would
+  have reported 0.288 against a measured 0.174.
 - **Consistency, per task.** Three attempts per task showed that 12 of the 13 tasks Nano
   ever solved, it solved only some of the time.
 - **A tool, not an analysis.** `plan` → `run` on Harbor → `report`, with the token and
@@ -398,6 +403,47 @@ frontier models find uncertain are not the ones a much weaker model finds uncert
 History earned its 16% in step 3, among models of one tier. Across tiers, what keeps the
 estimate honest is that the plan measures every task, not what history knows.
 
+### A second model, on the default plan
+
+The replay above tested the default plan on trials that already existed. NVIDIA Nemotron
+3.5 Lightning (`nvidia/Nemotron-3_5-Lightning` on Token Factory, the same list price as
+Nano) is the first model evaluated with it from scratch: `plan` with no arguments called 31
+tasks certain and ran each once, and ran the other 58 (57 uncertain plus `query-optimize`)
+twice. Same VM, same agent, same 60-turn budget, one sitting of 6.3 hours
+(`deploy/lightning.sh` runs both phases, each under the watchdog).
+
+| | |
+|---|---|
+| trials | **147 — 58 uncertain tasks × 2, 31 certain tasks × 1**, 0 infrastructure errors |
+| verdicts | 134 clean, 13 agent timeouts (scored as fails) |
+| passes | **21 across 18 tasks** |
+| tokens | 161.4M in, 3.7M out, **137.3M of the input served from cache** |
+| cost | **$10.57 at Token Factory list price** plus $1.45 of VM time for the 6.3 h of trials |
+| certain-task check | 10 of 10 near-certain fails failed; **10 of 21 near-certain passes passed** |
+
+**Nemotron 3.5 Lightning on Terminal-Bench 2.0, measured on all 89 tasks: 0.174, with a
+95% interval of 0.101–0.253**, about twice Nano's 0.079. Nothing in it is imputed.
+
+**The certain tasks are where the plan earned its keep.** Frontier history called 21 tasks
+near-certain passes and Lightning passed 10 of them. Filling those in from history, as the
+old default did, would have reported **0.288** from the same trials instead of 0.174. The
+fail side held again, 10 of 10. And the certain tasks were not dead weight: 10 of the
+model's 21 passes came from them.
+
+**Like for like it is still last of five.** On the 57 tasks every included model shares
+without feedback it scores 0.088 (95% interval 0.026–0.167), twice Nano's 0.042, with Opus
+4's 0.187 still above its interval. The gap between 0.174 and 0.088 is the task mix: its
+pass rate on the other 32 tasks is 0.328, and 12 of its 18 solved tasks are among them.
+
+**It works long, and the budget binds.** Nano's median trial took 12 steps and 5 of 237
+trials reached the 60-turn cap; Lightning's median is 47 steps and **59 of 147 trials
+reached the cap**, so its score is a floor under that budget. The long trajectories re-send
+a growing context every turn: 1.1M input tokens per trial against Nano's 0.18M, which is
+why a trial cost over four times as much even with 85% of the input cached (list price
+assumes no cache discount). Of the 58 uncertain tasks, 3 were solved on both attempts, 5
+on one of two and 50 on neither: as with Nano, what frontier history finds uncertain is
+mostly out of this model's reach.
+
 ## Step 6: can a layer lift a small model?
 
 Nemotron Nano ended 223 of its 237 trials by declaring the task complete, and 202 of those
@@ -490,6 +536,9 @@ python -m tally.run --plan data/plan_terminalbench.json --phase validate -n 4   
 python -m tally.run --plan data/plan_terminalbench.json --phase run -n 4        # step 5: the real evaluation
 python -m tally.report --plan data/plan_terminalbench.json                      # step 5: accuracy, rank, receipt, validation
 python -m tally.report --plan data/plan_terminalbench.json --replay             # step 5: step 3's plans replayed on the run's own attempts
+python -m tally.plan -o data/plan_terminalbench_lightning.json                 # step 5: the default plan, for the second model
+tmux new-session -d -s lrun "bash ~/tally/deploy/lightning.sh"                 # step 5: on the VM, validate then run, each under the watchdog
+python -m tally.report --plan data/plan_terminalbench_lightning.json --model nvidia/Nemotron-3_5-Lightning
 python -m tally.boost misfiled                                                  # step 6: answers filed as reasoning in the stock run
 python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checked:CheckedTerminus --ak max_rejections=2 -n 4
 python -m tally.run --plan data/plan_terminalbench.json --split dev --agent tally.checkeval:CheckEval --ak writers=nano-v1,nano,super,ultra --agent-timeout-multiplier 4 -n 3
@@ -514,6 +563,8 @@ puller lists each collection through the tree API and fetches per file instead.
 - **Fixed budgets per benchmark** — 10M tokens on Terminal-Bench, 30M on SWE-bench
   Pro — one to three orders of magnitude above typical defaults. Costs here are
   costs under generous budgets.
+- **The real runs are capped at 60 turns.** Nemotron 3.5 Lightning reached the cap in 59
+  of 147 trials, so its 0.174 is a floor under that budget; Nano reached it in 5 of 237.
 - **Six models.** Every leave-one-out result is a prior from five models, not fifty,
   and a ranking over six.
 - **One reasoning model, one prompt, zero-shot.** The cold-start numbers are a floor
