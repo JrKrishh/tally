@@ -378,7 +378,7 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; }
           </details>
         </div>
       </div>
-      <p class="note" style="margin-top:14px">Replayed on the per-attempt logs of <a href="https://arxiv.org/abs/2606.17930">arXiv 2606.17930</a> from <a href="https://github.com/evaleval/every_eval_ever">Every Eval Ever</a>: one agent scaffold, six models, fixed 10M / 30M token budgets. Sampled attempts are averaged over 200 seeds. The honest comparison is a plan with no history at all: running every Terminal-Bench task twice costs 17.5% and keeps the ranking at 0.986, so most of the saving is the attempt cap and history buys the rest. At five seeds, skipping certain tasks with three attempts read 0.989; at 200 it reads 0.973, which is why the default now runs certain tasks once.</p>
+      <p class="note" style="margin-top:14px">Replayed on the per-attempt logs of <a href="https://arxiv.org/abs/2606.17930">arXiv 2606.17930</a> from <a href="https://github.com/evaleval/every_eval_ever">Every Eval Ever</a>: one agent scaffold, six models, fixed 10M / 30M token budgets. Sampled attempts are averaged over 200 seeds. The honest comparison is a plan with no history at all: running every Terminal-Bench task twice costs 17.5% and keeps the ranking at 0.986, so most of the saving is the attempt cap and history buys the rest. At five seeds, skipping certain tasks with three attempts read 0.989; at 200 it reads 0.973, which is why the default now runs certain tasks once. Replayed on Harbor's own trials for 22 more benchmarks and 15 models, the default plan is cheaper than running every task twice on all 22, a median 19% fewer tokens, with the ranking within 0.01 of it on 20.</p>
     </div>
   </section>
 

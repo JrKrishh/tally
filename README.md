@@ -4,11 +4,13 @@
 
 **Live demo: https://jrkrishh.github.io/tally/**: the planner running on the real data, both Nemotron runs' results and receipts, and the layer experiment.
 
-Status: **steps 1–6: two real evaluations, and one agent layer tested on held-out
-tasks.** The data is validated, the mechanism is measured, the cost figure is earned in
-simulation against a no-history baseline — **Terminal-Bench at 14.7% of the tokens with
-the six-model ranking intact (Spearman 0.982), most of it from capping attempts** — and
-the product has now run a real evaluation end to end: Harbor drove NVIDIA Nemotron
+Status: **steps 1–7: two real evaluations, one agent layer tested on held-out tasks,
+and the plan replayed on 22 more benchmarks.** The data is validated, the mechanism is
+measured, the cost figure is earned in simulation against a no-history baseline —
+**Terminal-Bench at 14.7% of the tokens with the six-model ranking intact (Spearman
+0.982), most of it from capping attempts**; on 22 more Harbor benchmarks the default plan
+is cheaper than running every task twice on all 22, a median 19% fewer tokens (step 7) —
+and the product has now run a real evaluation end to end: Harbor drove NVIDIA Nemotron
 3 Nano on Nebius Token Factory through the cells the plan chose, on a Nebius AI Cloud
 VM. **Nemotron 3 Nano scores an estimated 0.079 on Terminal-Bench 2.0 (95% interval
 0.035–0.131), last of five against the frontier models' runs without correctness
@@ -58,7 +60,8 @@ What Tally adds sits around the selection, not in it:
 
 - **Tokens per attempt, not tasks, against a no-history baseline.** Step 3 prices every
   plan in tokens and compares it with simply running fewer attempts. Most of the saving
-  is the attempt cap; history takes off a further 16% among models of one tier.
+  is the attempt cap; history takes off a further 16% among models of one tier, and a
+  median 19% across 22 Harbor benchmarks with 15 models (step 7).
 - **Real runs on models outside the history.** Nemotron 3 Nano (step 5) shows what a
   replay among frontier models cannot: filling in "certain" tasks from frontier history
   would have tripled its score, and for a model that different, history buys nothing.
@@ -528,6 +531,78 @@ frontier's 0.5–0.6 is the model, not the scaffold. The misfiled answers remain
 worth making ([FEEDBACK.md](FEEDBACK.md) item 1). The whole experiment cost $1.11 of inference
 on dev, $0.63 for the check writers and $3.20 on held-out.
 
+## Step 7: does the plan hold across 22 more benchmarks?
+
+Steps 3 and 5 test the plans on one history: six frontier models under one scaffold, on
+two benchmarks. Harbor's own trials are a much larger one.
+[Harbor-Adapter](https://huggingface.co/datasets/kendx/Harbor-Adapter), released with the
+Harbor-Index paper, holds the trials of 16 models under six agents across 60 benchmarks,
+up to five trials per task. `tally.harbor pull` read 22 of those benchmarks (about 40 GB of
+shards, each deleted once read) down to one row per trial, reward and tokens, 379,870
+trials; `tally.harbor replay` ran step 3's plans on each with `select.simulate` unchanged.
+The 22 cover 15 models under Terminus-2, Claude Code, Codex, Gemini CLI and Qwen Coder.
+
+Two choices differ from step 3. A system is a model and agent pair, 15 to 28 per
+benchmark, and each system's prior comes only from systems of *other* models, so the
+held-out model is new to history, not just its agent. And the full evaluation is every
+logged trial, about five per task rather than 10–15, so every plan lands at a larger share
+of it than in step 3; the comparison that carries over is against running every task
+twice. A trial passes when its reward is 1, as everywhere else in Tally; five benchmarks
+give partial credit (scicode on 46% of trials, gaia2 15%, crmarena 7%, reasoning-gym 6%,
+strongreject 4%), and a partial score counts as a fail. Each plan is averaged over 200
+attempt samples on the tasks every included system shares: 312,801 trials in all.
+
+| benchmark | systems (models) · tasks | history calls certain | **default plan**: tokens · Spearman | every task twice: tokens · Spearman | every task once: Spearman | skip certain, 3 attempts: Spearman · MAE |
+|---|---|---|---|---|---|---|
+| humanevalfix | 28 (15) · 162 | 100% | **20.7% · 0.830** | 41.4% · 0.918 | 0.830 | −0.565 · 0.039 |
+| kumo | 26 (14) · 179 | 90% | **24.8% · 0.969** | 42.9% · 0.978 | 0.940 | 0.863 · 0.033 |
+| strongreject | 24 (14) · 143 | 74% | **26.2% · 0.972** | 40.7% · 0.976 | 0.951 | 0.913 · 0.041 |
+| scicode | 21 (11) · 68 | 67% | **25.7% · 0.972** | 43.2% · 0.974 | 0.958 | 0.971 · 0.013 |
+| gaia2 | 20 (12) · 91 | 67% | **28.5% · 0.971** | 44.1% · 0.975 | 0.945 | 0.980 · 0.010 |
+| bfcl | 27 (15) · 112 | 66% | **28.1% · 0.958** | 41.0% · 0.967 | 0.937 | 0.738 · 0.030 |
+| omnimath | 25 (13) · 151 | 61% | **33.6% · 0.985** | 44.6% · 0.988 | 0.974 | 0.987 · 0.023 |
+| reasoning-gym | 19 (11) · 432 | 61% | **31.3% · 0.996** | 43.9% · 0.997 | 0.993 | 0.987 · 0.031 |
+| medagentbench | 28 (15) · 89 | 53% | **37.6% · 0.984** | 51.4% · 0.987 | 0.971 | 0.992 · 0.025 |
+| bigcodebench | 26 (15) · 125 | 53% | **36.8% · 0.933** | 49.5% · 0.949 | 0.880 | 0.844 · 0.018 |
+| gpqa-diamond | 28 (15) · 170 | 52% | **33.0% · 0.987** | 40.5% · 0.989 | 0.978 | 0.978 · 0.023 |
+| mmau | 28 (15) · 84 | 49% | **38.0% · 0.969** | 47.3% · 0.973 | 0.942 | 0.933 · 0.034 |
+| aime | 28 (15) · 55 | 48% | **38.0% · 0.986** | 42.7% · 0.989 | 0.973 | 0.981 · 0.033 |
+| swebench-verified | 28 (15) · 87 | 39% | **33.8% · 0.950** | 41.1% · 0.959 | 0.918 | 0.955 · 0.036 |
+| ineqmath | 26 (14) · 99 | 38% | **34.3% · 0.984** | 40.5% · 0.986 | 0.975 | 0.984 · 0.048 |
+| quixbugs | 19 (11) · 72 | 35% | **36.4% · 0.973** | 44.9% · 0.977 | 0.948 | 0.977 · 0.059 |
+| arc-agi-2 | 16 (10) · 72 | 30% | **39.8% · 0.958** | 47.7% · 0.963 | 0.925 | 0.970 · 0.042 |
+| spreadsheetbench | 27 (15) · 180 | 25% | **36.7% · 0.985** | 41.2% · 0.987 | 0.968 | 0.991 · 0.025 |
+| terminal-bench | 15 (11) · 66 | 23% | **41.4% · 0.978** | 45.1% · 0.980 | 0.961 | 0.983 · 0.020 |
+| crmarena | 20 (11) · 94 | 19% | **39.4% · 0.984** | 42.9% · 0.985 | 0.968 | 0.987 · 0.012 |
+| mmmlu | 26 (14) · 132 | 13% | **39.9% · 0.995** | 42.5% · 0.995 | 0.991 | 0.996 · 0.006 |
+| usaco | 23 (12) · 77 | 1% | **45.2% · 0.993** | 45.4% · 0.993 | 0.983 | 0.996 · 0.010 |
+
+Sorted by how much of the benchmark history calls certain. Four findings:
+
+1. **History's saving holds on every benchmark.** The default plan is cheaper than running
+   every task twice with no history on **22 of 22**, a median **19% fewer tokens** (0–50%),
+   with the ranking within 0.01 of that baseline on 20. The saving is the share of tasks
+   history calls certain, correlation 0.95 across benchmarks: half the tokens on
+   humanevalfix, where history calls every task certain, 35% on gaia2, nothing on usaco,
+   where it calls almost none. Step 3 measured 16% on Terminal-Bench.
+2. **It ranks better than one attempt per task on 21 of 22.** The exception is humanevalfix,
+   where "certain tasks once" is one attempt per task.
+3. **Filling in the certain tasks fails at scale.** Skipping them, with three attempts on
+   the rest, has a median accuracy error of 0.028 against 0.010 for the default, and is
+   worse on 18 of 22. Where history is surest it breaks: on humanevalfix it measures
+   nothing and the ranking inverts (Spearman −0.565), and on bfcl, bigcodebench and kumo it
+   falls to 0.74–0.86. Step 5 found the same with a model from outside the history; here
+   it happens inside it, because a task history calls certain is only certain on average.
+4. **Where the default falls short.** It stays at or above Spearman 0.95 on 20 of 22.
+   humanevalfix is nearly saturated (97.9% of its trials pass), so the ranking is decided
+   among near-ties that one attempt cannot separate: 0.830 against 0.918 for two attempts,
+   at an accuracy error of 0.003. bigcodebench reads 0.933 against 0.949. A plan that
+   falls back to two attempts when history calls nearly everything certain would close
+   the first gap; Tally does not do that yet.
+
+Harbor-Adapter's license field reads "other" with no terms given. Tally keeps one row per
+trial (identifiers, reward, token counts), locally in `data/harbor/`, which is not in this repo.
+
 ## Reproduce
 
 ```bash
@@ -557,6 +632,8 @@ python -m tally.boost thresholds jobs/<checkeval job> jobs/<dev job>            
 python -m tally.run --plan data/plan_terminalbench.json --split heldout --attempts 3 --agent tally.checked:CheckedTerminus --ak max_rejections=2 -n 4
 python -m tally.boost compare jobs/<held-out job> --table                       # step 6: the paired result
 .venv-harbor/Scripts/python tests/test_checked.py                               # the layer's tests, in Harbor's Python
+python -m tally.harbor pull --benchmark bfcl --benchmark gaia2                  # step 7: one row per Harbor-Adapter trial; each shard deleted once read
+python -m tally.harbor replay                                                   # step 7: the four plans on every benchmark pulled
 python -m tally.site                                                            # rebuild docs/data.js for the demo page
 ```
 
@@ -575,8 +652,10 @@ puller lists each collection through the tree API and fetches per file instead.
   costs under generous budgets.
 - **The real runs are capped at 60 turns.** Nemotron 3.5 Lightning reached the cap in 59
   of 147 trials, so its 0.174 is a floor under that budget; Nano reached it in 5 of 237.
-- **Six models.** Every leave-one-out result is a prior from five models, not fifty,
-  and a ranking over six.
+- **Six models.** Every leave-one-out result in steps 2–4 is a prior from five models, not
+  fifty, and a ranking over six. Step 7 widens that to 15 models, but under Harbor's agents
+  and adapters only, and the full evaluation it scores against is about five trials a
+  task, so its own ranking carries sampling noise no plan can remove.
 - **One reasoning model, one prompt, zero-shot.** The cold-start numbers are a floor
   for what task text can give, not a ceiling.
 - **Every SWE-bench Pro `sample_id` carries a redaction artefact** (`…<AWS-SECRET-KE…>`).
