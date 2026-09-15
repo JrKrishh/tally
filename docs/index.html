@@ -126,6 +126,11 @@ p { margin: 0; }
 .top nav { margin-left: auto; display: flex; gap: 20px; font-size: 14px; }
 .top nav a { color: var(--ink-2); text-decoration: none; }
 .top nav a:hover { color: var(--ink); text-decoration: underline; }
+@media (max-width: 680px) {
+  .top .wrap { flex-wrap: wrap; height: auto; padding-block: 10px; gap: 4px 24px; }
+  .top nav { margin-left: 0; width: 100%; flex-wrap: wrap; gap: 0 12px; font-size: 13px; }
+  .top nav a { padding-block: 6px; }
+}
 
 /* intro */
 .intro { padding: 48px 0 28px; display: grid; gap: 14px; }
@@ -198,6 +203,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .stat-big .k { color: var(--ink-2); font-size: 15px; margin-top: 8px; }
 .grid-foot { font: 400 12px/1.4 var(--mono); color: var(--muted); margin-top: 8px; }
 .receipt-col { display: grid; gap: 14px; min-width: 0; }
+.receipt-col .seg button { flex: 1; }
 
 /* the receipt */
 .receipt {

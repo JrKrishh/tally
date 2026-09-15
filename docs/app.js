@@ -325,7 +325,7 @@
     html("hr", {}, box);
     row("Estimated accuracy", f3(R.estimate));
     row("95% interval", f3(R.ci[0]) + "–" + f3(R.ci[1]), "sub");
-    row("Rank, like for like", (Object.keys(frontier).filter(function (n) { return frontier[n] > own; }).length + 1) + " of " + (Object.keys(frontier).length + 1));
+    row("Rank vs frontier, like for like", (Object.keys(frontier).filter(function (n) { return frontier[n] > own; }).length + 1) + " of " + (Object.keys(frontier).length + 1));
     html("div", { class: "r-foot" }, box,
       "Nebius Token Factory · Nebius AI Cloud cpu-d3 · trials " + rc.sittings.map(function (p) { return p[0] + "–" + p[1]; }).join(", ") + " UTC. VM hours count running trials only.");
   }
